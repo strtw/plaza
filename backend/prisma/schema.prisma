@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // User's contacts where they are the initiator
+  contacts      Contact[] @relation("UserContacts")
+  // Contacts where this user is the contact
+  contactOf     Contact[] @relation("ContactUser")
+  
+  statuses      Status[]
+  invitesCreated Invite[] @relation("InviteCreator")
+  invitesUsed   Invite[] @relation("InviteUser")
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  userId    String
+  contactUserId String
+  status    ContactStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User @relation("UserContacts", fields: [userId], references: [id], onDelete: Cascade)
+  contactUser User @relation("ContactUser", fields: [contactUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contactUserId])
+  @@index([userId])
+  @@index([contactUserId])
+}
+
+enum ContactStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+model Status {
+  id        String   @id @default(uuid())
+  userId    String
+  status    AvailabilityStatus
+  message   String?
+  startTime DateTime
+  endTime   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([startTime, endTime])
+}
+
+enum AvailabilityStatus {
+  AVAILABLE      // Green
+  QUESTIONABLE   // Yellow
+  UNAVAILABLE    // Red
+}
+
+model Invite {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  inviterId String
+  usedById  String?
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  inviter   User @relation("InviteCreator", fields: [inviterId], references: [id], onDelete: Cascade)
+  usedBy    User? @relation("InviteUser", fields: [usedById], references: [id])
+
+  @@index([code])
+  @@index([inviterId])
+}
+

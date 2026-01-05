@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "scheme": "socialavailability",
+    "plugins": [
+      "expo-router"
+    ],
+    "name": "mobile-app",
+    "slug": "mobile-app",
+    "ios": {
+      "bundleIdentifier": "com.yourcompany.socialavailability",
+      "associatedDomains": ["applinks:yourapp.com"]
+    },
+    "android": {
+      "package": "com.yourcompany.socialavailability",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "yourapp.com",
+              "pathPrefix": "/invite"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    }
+  }
+}
