@@ -7,7 +7,8 @@ export enum AvailabilityStatus {
 export interface User {
   id: string;
   name: string | null;
-  email: string;
+  email: string | null;
+  phone: string;
 }
 
 export interface Contact extends User {

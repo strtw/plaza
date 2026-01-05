@@ -8,10 +8,16 @@
     "slug": "mobile-app",
     "ios": {
       "bundleIdentifier": "com.yourcompany.socialavailability",
-      "associatedDomains": ["applinks:yourapp.com"]
+      "associatedDomains": ["applinks:yourapp.com"],
+      "infoPlist": {
+        "NSContactsUsageDescription": "We need access to your contacts to find friends who are already on Plaza. We only use phone numbers to find matches and don't store your contact list."
+      }
     },
     "android": {
       "package": "com.yourcompany.socialavailability",
+      "permissions": [
+        "READ_CONTACTS"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",

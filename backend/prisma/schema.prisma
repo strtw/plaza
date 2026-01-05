@@ -10,9 +10,9 @@ datasource db {
 model User {
   id        String   @id @default(uuid())
   clerkId   String   @unique
-  email     String   @unique
+  email     String?  @unique  // Optional - phone is primary identifier
   name      String?
-  phone     String?
+  phone     String   @unique // Required and unique - primary identifier
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

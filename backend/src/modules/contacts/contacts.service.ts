@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaClient, ContactStatus } from '@prisma/client';
+import { UsersService } from '../users/users.service';
 
 const prisma = new PrismaClient();
 
 @Injectable()
 export class ContactsService {
+  constructor(private readonly usersService: UsersService) {}
   async getContacts(userId: string) {
     const contacts = await prisma.contact.findMany({
       where: {
@@ -17,6 +19,7 @@ export class ContactsService {
             id: true,
             name: true,
             email: true,
+            phone: true,
           },
         },
       },
@@ -59,6 +62,7 @@ export class ContactsService {
             id: true,
             name: true,
             email: true,
+            phone: true,
           },
         },
       },
@@ -93,6 +97,73 @@ export class ContactsService {
     ]);
 
     return { success: true };
+  }
+
+  /**
+   * Sync contacts - PRIVACY: Does NOT store the phone numbers list
+   * Only returns which phone numbers belong to existing users
+   * 
+   * @param userId - The current user's ID
+   * @param phoneNumbers - Array of phone numbers from user's device contacts
+   * @returns Object with:
+   *   - existingUsers: Users that match the phone numbers
+   *   - notUsers: Phone numbers that don't belong to any user
+   */
+  async syncContacts(userId: string, phoneNumbers: string[]) {
+    if (!phoneNumbers || phoneNumbers.length === 0) {
+      return {
+        existingUsers: [],
+        notUsers: [],
+      };
+    }
+
+    try {
+      // Find which phone numbers belong to existing users
+      // NOTE: We do NOT store the phoneNumbers array - this is privacy-first
+      const userMap = await this.usersService.findUsersByPhoneNumbers(phoneNumbers);
+
+      // Get current user's existing contacts to avoid duplicates
+      const existingContacts = await prisma.contact.findMany({
+        where: { userId },
+        select: { contactUserId: true },
+      });
+      const existingContactIds = new Set(existingContacts.map(c => c.contactUserId));
+
+      // Separate into existing users and non-users
+      const existingUsers: any[] = [];
+      const notUsers: string[] = [];
+
+      phoneNumbers.forEach(phone => {
+        const normalized = phone.replace(/\D/g, ''); // Normalize
+        const user = userMap[normalized];
+        
+        if (user && user.id !== userId) {
+          // User exists and is not the current user
+          // Check if already a contact
+          const isAlreadyContact = existingContactIds.has(user.id);
+          existingUsers.push({
+            ...user,
+            isAlreadyContact,
+          });
+        } else {
+          // Not a user (or is current user)
+          notUsers.push(phone);
+        }
+      });
+
+      return {
+        existingUsers,
+        notUsers,
+        // Privacy note: We do NOT store the phoneNumbers list
+      };
+    } catch (error) {
+      console.error('Error syncing contacts:', error);
+      // Return empty result instead of throwing to prevent breaking the app
+      return {
+        existingUsers: [],
+        notUsers: [],
+      };
+    }
   }
 }
 
