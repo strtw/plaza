@@ -72,11 +72,6 @@ export const createApi = (getToken: () => Promise<string | null>) => {
     getInvite: (code: string) => fetchApi(`/invites/${code}`),
     useInvite: (code: string) =>
       fetchApi(`/invites/${code}/use`, { method: 'POST' }),
-    syncContacts: (phoneNumbers: string[]) =>
-      fetchApi('/contacts/sync', {
-        method: 'POST',
-        body: JSON.stringify({ phoneNumbers }),
-      }),
   };
 };
 
