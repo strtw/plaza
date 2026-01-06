@@ -12,7 +12,7 @@ export class ContactsService {
       const contacts = await prisma.contact.findMany({
         where: {
           userId,
-          status: ContactStatus.ACCEPTED,
+          status: ContactStatus.ACTIVE,
         },
         include: {
           contactUser: {
@@ -40,14 +40,14 @@ export class ContactsService {
         data: {
           userId,
           contactUserId,
-          status: ContactStatus.ACCEPTED,
+          status: ContactStatus.ACTIVE,
         },
       }),
       prisma.contact.create({
         data: {
           userId: contactUserId,
           contactUserId: userId,
-          status: ContactStatus.ACCEPTED,
+          status: ContactStatus.ACTIVE,
         },
       }),
     ]);
@@ -55,49 +55,33 @@ export class ContactsService {
     return { success: true };
   }
 
-  async getPendingInvites(userId: string) {
-    return prisma.contact.findMany({
-      where: {
-        contactUserId: userId,
-        status: ContactStatus.PENDING,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-    });
-  }
-
-  async acceptContact(userId: string, contactId: string) {
+  async blockContact(userId: string, contactId: string) {
     const contact = await prisma.contact.findFirst({
       where: {
         id: contactId,
-        contactUserId: userId,
-        status: ContactStatus.PENDING,
+        userId,
+        status: ContactStatus.ACTIVE,
       },
     });
 
     if (!contact) {
-      throw new NotFoundException('Contact invitation not found');
+      throw new NotFoundException('Contact not found');
     }
 
+    // Block the contact (both directions)
     await prisma.$transaction([
       prisma.contact.update({
         where: { id: contactId },
-        data: { status: ContactStatus.ACCEPTED },
+        data: { status: ContactStatus.BLOCKED },
       }),
-      prisma.contact.create({
-        data: {
-          userId,
-          contactUserId: contact.userId,
-          status: ContactStatus.ACCEPTED,
+      // Also block the reverse relationship if it exists
+      prisma.contact.updateMany({
+        where: {
+          userId: contact.contactUserId,
+          contactUserId: userId,
+          status: ContactStatus.ACTIVE,
         },
+        data: { status: ContactStatus.BLOCKED },
       }),
     ]);
 

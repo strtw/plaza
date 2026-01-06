@@ -18,14 +18,9 @@ export class ContactsController {
     return this.contactsService.addContact(req.userId, dto.contactUserId);
   }
 
-  @Get('pending')
-  getPendingInvites(@Request() req) {
-    return this.contactsService.getPendingInvites(req.userId);
-  }
-
-  @Post(':id/accept')
-  acceptContact(@Request() req, @Param('id') contactId: string) {
-    return this.contactsService.acceptContact(req.userId, contactId);
+  @Post(':id/block')
+  blockContact(@Request() req, @Param('id') contactId: string) {
+    return this.contactsService.blockContact(req.userId, contactId);
   }
 }
 

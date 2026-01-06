@@ -45,7 +45,7 @@ export class StatusService {
       }
 
       const contacts = await prisma.contact.findMany({
-        where: { userId, status: ContactStatus.ACCEPTED },
+        where: { userId, status: ContactStatus.ACTIVE },
         select: { contactUserId: true },
       });
 

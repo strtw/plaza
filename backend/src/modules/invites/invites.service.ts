@@ -66,14 +66,14 @@ export class InvitesService {
         data: {
           userId: invite.inviterId,
           contactUserId: userId,
-          status: ContactStatus.ACCEPTED,
+          status: ContactStatus.ACTIVE,
         },
       }),
       prisma.contact.create({
         data: {
           userId,
           contactUserId: invite.inviterId,
-          status: ContactStatus.ACCEPTED,
+          status: ContactStatus.ACTIVE,
         },
       }),
     ]);
