@@ -227,8 +227,13 @@ function HomeScreenContent() {
                 keyExtractor={(item, index) => `${item.phone}-${index}`}
                 renderItem={({ item }) => (
                   <View style={styles.contactItem}>
-                    <Text style={styles.contactName}>{item.name}</Text>
-                    <Text style={styles.contactPhone}>{item.phone}</Text>
+                    <View style={styles.checkbox}>
+                      <View style={styles.checkboxInner} />
+                    </View>
+                    <View style={styles.contactInfo}>
+                      <Text style={styles.contactName}>{item.name}</Text>
+                      <Text style={styles.contactPhone}>{item.phone}</Text>
+                    </View>
                   </View>
                 )}
                 ListEmptyComponent={
@@ -340,9 +345,32 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderRadius: 4,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: '#007AFF',
+    opacity: 0,
+  },
+  contactInfo: {
+    flex: 1,
   },
   contactName: {
     fontSize: 16,
