@@ -1,15 +1,15 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable } from 'react-native';
 
 function HomeScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const api = createApi(getToken);
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   if (!isLoaded) {
     return (
@@ -64,12 +64,32 @@ function HomeScreenContent() {
             <Text style={{ marginBottom: 20 }}>No contacts yet.</Text>
             <Pressable
               style={styles.syncButton}
+              onPress={() => setShowSyncModal(true)}
             >
               <Text style={styles.syncButtonText}>Sync Contacts to Find Friends</Text>
             </Pressable>
           </View>
         }
       />
+      
+      <Modal
+        visible={showSyncModal}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowSyncModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setShowSyncModal(false)}>
+              <Text style={styles.modalCloseButton}>Close</Text>
+            </Pressable>
+          </View>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Sync Contacts</Text>
+            <Text style={styles.modalSubtitle}>Find friends who are already on Plaza</Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -109,6 +129,34 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    padding: 16,
+    paddingTop: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalCloseButton: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#666',
   },
 });
 
