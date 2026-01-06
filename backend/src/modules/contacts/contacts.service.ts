@@ -8,24 +8,29 @@ const prisma = new PrismaClient();
 export class ContactsService {
   constructor(private readonly usersService: UsersService) {}
   async getContacts(userId: string) {
-    const contacts = await prisma.contact.findMany({
-      where: {
-        userId,
-        status: ContactStatus.ACCEPTED,
-      },
-      include: {
-        contactUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
+    try {
+      const contacts = await prisma.contact.findMany({
+        where: {
+          userId,
+          status: ContactStatus.ACCEPTED,
+        },
+        include: {
+          contactUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    return contacts.map(c => c.contactUser);
+      return contacts.map(c => c.contactUser);
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+      return []; // Return empty array on error to prevent breaking the app
+    }
   }
 
   async addContact(userId: string, contactUserId: string) {

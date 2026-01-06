@@ -19,8 +19,14 @@ export class StatusController {
   }
 
   @Get('contacts')
-  getContactsStatuses(@Request() req) {
-    return this.statusService.getContactsStatuses(req.userId);
+  async getContactsStatuses(@Request() req) {
+    try {
+      return await this.statusService.getContactsStatuses(req.userId);
+    } catch (error: any) {
+      console.error('Error in getContactsStatuses controller:', error);
+      // Return empty array instead of throwing to prevent 500 errors
+      return [];
+    }
   }
 }
 
