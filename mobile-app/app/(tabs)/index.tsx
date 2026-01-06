@@ -14,6 +14,8 @@ function HomeScreenContent() {
   const [deviceContacts, setDeviceContacts] = useState<Array<{ name: string; phone: string }>>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [needsFullAccess, setNeedsFullAccess] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [savedContacts, setSavedContacts] = useState<Array<{ name: string; phone: string }>>([]);
   const appState = useRef(AppState.currentState);
 
   // Function to load contacts
@@ -91,6 +93,7 @@ function HomeScreenContent() {
       setDeviceContacts([]);
       setIsLoadingContacts(false);
       setNeedsFullAccess(false);
+      setSelectedContacts(new Set());
     }
   }, [showSyncModal]);
 
@@ -186,6 +189,27 @@ function HomeScreenContent() {
             <Pressable onPress={() => setShowSyncModal(false)}>
               <Text style={styles.modalCloseButton}>Close</Text>
             </Pressable>
+            <Pressable
+              style={[styles.doneButton, selectedContacts.size === 0 && styles.doneButtonDisabled]}
+              onPress={() => {
+                // Save selected contacts
+                const selected = deviceContacts.filter(contact => 
+                  selectedContacts.has(contact.phone)
+                );
+                setSavedContacts(selected);
+                console.log('[Contacts] Saved contacts:', selected);
+                Alert.alert(
+                  'Contacts Saved',
+                  `Saved ${selected.length} contact${selected.length !== 1 ? 's' : ''}`,
+                  [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
+                );
+              }}
+              disabled={selectedContacts.size === 0}
+            >
+              <Text style={[styles.doneButtonText, selectedContacts.size === 0 && styles.doneButtonTextDisabled]}>
+                Done {selectedContacts.size > 0 && `(${selectedContacts.size})`}
+              </Text>
+            </Pressable>
           </View>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Sync Contacts</Text>
@@ -225,17 +249,31 @@ function HomeScreenContent() {
               <FlatList
                 data={deviceContacts}
                 keyExtractor={(item, index) => `${item.phone}-${index}`}
-                renderItem={({ item }) => (
-                  <View style={styles.contactItem}>
-                    <View style={styles.checkbox}>
-                      <View style={styles.checkboxInner} />
-                    </View>
-                    <View style={styles.contactInfo}>
-                      <Text style={styles.contactName}>{item.name}</Text>
-                      <Text style={styles.contactPhone}>{item.phone}</Text>
-                    </View>
-                  </View>
-                )}
+                renderItem={({ item }) => {
+                  const isSelected = selectedContacts.has(item.phone);
+                  return (
+                    <Pressable
+                      style={styles.contactItem}
+                      onPress={() => {
+                        const newSelected = new Set(selectedContacts);
+                        if (isSelected) {
+                          newSelected.delete(item.phone);
+                        } else {
+                          newSelected.add(item.phone);
+                        }
+                        setSelectedContacts(newSelected);
+                      }}
+                    >
+                      <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
+                        {isSelected && <View style={styles.checkboxInner} />}
+                      </View>
+                      <View style={styles.contactInfo}>
+                        <Text style={styles.contactName}>{item.name}</Text>
+                        <Text style={styles.contactPhone}>{item.phone}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                }}
                 ListEmptyComponent={
                   <View style={styles.emptyContainer}>
                     <Text style={styles.emptyText}>No contacts found</Text>
@@ -309,6 +347,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
     paddingTop: 60,
     borderBottomWidth: 1,
@@ -318,6 +359,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#007AFF',
     fontWeight: '600',
+  },
+  doneButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+  },
+  doneButtonDisabled: {
+    backgroundColor: '#e0e0e0',
+  },
+  doneButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  doneButtonTextDisabled: {
+    color: '#999',
   },
   modalContent: {
     flex: 1,
@@ -362,12 +420,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#fff',
   },
-  checkboxInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 2,
+  checkboxChecked: {
     backgroundColor: '#007AFF',
-    opacity: 0,
+  },
+  checkboxInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: '#fff',
   },
   contactInfo: {
     flex: 1,
