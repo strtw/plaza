@@ -236,18 +236,22 @@ function HomeScreenContent() {
     return <Redirect href="/(auth)/sign-in" />;
   }
 
-  const { data: contacts, isLoading, refetch } = useQuery({
-    queryKey: ['contacts'],
-    queryFn: api.getContacts,
-    enabled: isLoaded && isSignedIn,
-  });
+    const { data: contacts, isLoading, refetch } = useQuery({
+      queryKey: ['contacts'],
+      queryFn: api.getContacts,
+      enabled: isLoaded && isSignedIn,
+    });
 
-  const { data: statuses } = useQuery({
-    queryKey: ['contacts-statuses'],
-    queryFn: api.getContactsStatuses,
-    enabled: isLoaded && isSignedIn,
-    refetchInterval: 10000, // Poll every 10 seconds
-  });
+    // Note: Selected contacts are saved but not displayed in the main contacts list
+    // They will only appear once they join Plaza and become actual contacts
+    // This is for future invite tracking features (pending invites, resend options)
+
+    const { data: statuses } = useQuery({
+      queryKey: ['contacts-statuses'],
+      queryFn: api.getContactsStatuses,
+      enabled: isLoaded && isSignedIn,
+      refetchInterval: 10000, // Poll every 10 seconds
+    });
 
   // Mutation for checking which contacts are users
   const checkContactsMutation = useMutation({
@@ -280,11 +284,12 @@ function HomeScreenContent() {
     },
   });
 
-  // Merge contacts with their statuses
+  // Only show Plaza users in the contacts list (people you can actually interact with)
+  // Selected contacts are saved but only appear once they join Plaza
   const contactsWithStatus = contacts?.map((contact: any) => ({
     ...contact,
     status: statuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
-  }));
+  })) || [];
 
   if (isLoading) {
     return (
@@ -301,7 +306,13 @@ function HomeScreenContent() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <ContactListItem contact={item} />}
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={refetch} />
+          <RefreshControl 
+            refreshing={isLoading} 
+            onRefresh={() => {
+              refetch();
+              queryClient.invalidateQueries({ queryKey: ['selected-contacts'] });
+            }} 
+          />
         }
         ListEmptyComponent={
           <View style={{ padding: 20, alignItems: 'center' }}>
@@ -385,46 +396,52 @@ function HomeScreenContent() {
                   }
 
                   try {
-                    // Step 1: Hash the phone numbers
-                    console.log('[Contact Sync] Step 1: Hashing phone numbers...');
+                    // Step 1: Save all selected contacts (even if not Plaza users)
+                    console.log('[Contact Sync] Step 1: Saving selected contacts...');
+                    await api.saveSelectedContacts(selected);
+                    console.log('[Contact Sync] Step 1: Saved', selected.length, 'selected contacts');
+                    
+                    // Step 2: Hash the phone numbers
+                    console.log('[Contact Sync] Step 2: Hashing phone numbers...');
                     const phoneNumbers = selected.map(c => c.phone);
                     const phoneHashes = await hashPhones(phoneNumbers, api.hashPhones);
-                    console.log('[Contact Sync] Step 1: Hashed', phoneHashes.length, 'phone numbers');
+                    console.log('[Contact Sync] Step 2: Hashed', phoneHashes.length, 'phone numbers');
                     
-                    // Step 2: Check which are existing users
-                    console.log('[Contact Sync] Step 2: Checking which are Plaza users...');
+                    // Step 3: Check which are existing users
+                    console.log('[Contact Sync] Step 3: Checking which are Plaza users...');
                     const checkResult = await checkContactsMutation.mutateAsync(phoneHashes);
-                    console.log('[Contact Sync] Step 2: Found', checkResult.existingUsers.length, 'existing users');
+                    console.log('[Contact Sync] Step 3: Found', checkResult.existingUsers.length, 'existing users');
                     
-                    // Step 3: For existing users, add them as contacts
+                    // Step 4: For existing users, add them as contacts
                     if (checkResult.existingUsers.length > 0) {
-                      console.log('[Contact Sync] Step 3: Matching contacts...');
+                      console.log('[Contact Sync] Step 4: Matching contacts...');
                       const existingUserHashes = checkResult.existingUsers.map(u => u.phoneHash);
                       await matchContactsMutation.mutateAsync(existingUserHashes);
-                      console.log('[Contact Sync] Step 3: Contacts matched successfully');
+                      console.log('[Contact Sync] Step 4: Contacts matched successfully');
                     }
                     
-                    // Step 4: Show results
+                    // Step 5: Show results
                     const existingCount = checkResult.existingUsers.length;
                     const nonUserCount = checkResult.nonUserHashes.length;
                     
                     let message = '';
                     if (existingCount > 0 && nonUserCount > 0) {
-                      message = `Added ${existingCount} friend${existingCount !== 1 ? 's' : ''} on Plaza. ${nonUserCount} contact${nonUserCount !== 1 ? 's' : ''} not on Plaza yet - invite them to join!`;
+                      message = `Added ${existingCount} friend${existingCount !== 1 ? 's' : ''} on Plaza. ${nonUserCount} contact${nonUserCount !== 1 ? 's' : ''} saved - invite them to join!`;
                     } else if (existingCount > 0) {
                       message = `Added ${existingCount} friend${existingCount !== 1 ? 's' : ''} on Plaza!`;
                     } else {
-                      message = `${nonUserCount} contact${nonUserCount !== 1 ? 's' : ''} not on Plaza yet. Invite them to join!`;
+                      message = `Saved ${nonUserCount} contact${nonUserCount !== 1 ? 's' : ''}. Invite them to join Plaza!`;
                     }
                     
                     Alert.alert(
-                      'Contacts Synced',
+                      'Contacts Saved',
                       message,
                       [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
                     );
                     
                     // Refresh contacts list
                     queryClient.invalidateQueries({ queryKey: ['contacts'] });
+                    queryClient.invalidateQueries({ queryKey: ['selected-contacts'] });
                     queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
                   } catch (error: any) {
                     console.error('Error syncing contacts:', error);
