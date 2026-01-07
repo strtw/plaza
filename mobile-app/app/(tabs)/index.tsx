@@ -288,6 +288,10 @@ function HomeScreenContent() {
                       // Send contacts with phone and name
                       const contacts = selected.map(c => ({ phone: c.phone, name: c.name }));
                       const result = await api.createMockUsers(contacts);
+                      
+                      // Refresh the Plaza users list after creating mock users
+                      await checkContactsInPlaza(deviceContacts);
+                      
                       Alert.alert(
                         'Mock Users Created',
                         `Created ${result.created} test user${result.created !== 1 ? 's' : ''}.\n\nThey will appear as existing Plaza users.`,

@@ -97,6 +97,8 @@ export class ContactsService {
    * Note: phoneNumbers parameter should be phone hashes (not raw phone numbers)
    */
   async matchContacts(userId: string, phoneHashes: string[]) {
+    const matchedUsers: any[] = []; // Declare outside try block for error handler access
+    
     try {
       console.log('[ContactsService] matchContacts called with userId:', userId, 'phoneHashes count:', phoneHashes?.length);
       
@@ -112,8 +114,6 @@ export class ContactsService {
         };
       }
 
-      const matchedUsers: any[] = [];
-
       // Find all users matching these phone hashes (use service method for consistency)
       console.log('[ContactsService] Finding users by phone hashes...');
       const existingUsers = await this.usersService.findByPhoneHashes(phoneHashes);
@@ -125,63 +125,110 @@ export class ContactsService {
 
       // Create contact relationships for matched users (bidirectional)
       for (const contactUser of otherUsers) {
-        // Check if contact relationship already exists
-        const existingContact = await prisma.contact.findFirst({
-          where: {
-            userId,
-            contactUserId: contactUser.id,
-          },
-        });
+        try {
+          // Check if contact relationship already exists (both directions)
+          const existingContact = await prisma.contact.findFirst({
+            where: {
+              userId,
+              contactUserId: contactUser.id,
+            },
+          });
 
-        if (!existingContact) {
-          // Create bidirectional contact relationship
-          await prisma.$transaction([
-            prisma.contact.create({
-              data: {
-                userId,
-                contactUserId: contactUser.id,
-                status: ContactStatus.ACTIVE,
-              },
-            }),
-            prisma.contact.create({
-              data: {
-                userId: contactUser.id,
-                contactUserId: userId,
-                status: ContactStatus.ACTIVE,
-              },
-            }),
-          ]);
-        } else if (existingContact.status === ContactStatus.BLOCKED) {
-          // If previously blocked, reactivate
-          await prisma.$transaction([
-            prisma.contact.update({
+          const existingReverseContact = await prisma.contact.findFirst({
+            where: {
+              userId: contactUser.id,
+              contactUserId: userId,
+            },
+          });
+
+          // Create or update forward relationship (userId -> contactUserId)
+          if (!existingContact) {
+            try {
+              await prisma.contact.create({
+                data: {
+                  userId,
+                  contactUserId: contactUser.id,
+                  status: ContactStatus.ACTIVE,
+                },
+              });
+            } catch (createError: any) {
+              // If it's a duplicate constraint error, contact was created between check and create (race condition)
+              if (createError.code === 'P2002') {
+                console.log('[ContactsService] Forward contact relationship already exists (race condition), continuing...');
+              } else {
+                throw createError; // Re-throw if it's a different error
+              }
+            }
+          } else if (existingContact.status === ContactStatus.BLOCKED) {
+            // Reactivate if previously blocked
+            await prisma.contact.update({
               where: { id: existingContact.id },
               data: { status: ContactStatus.ACTIVE },
-            }),
-            // Also reactivate reverse relationship if it exists
-            prisma.contact.updateMany({
-              where: {
-                userId: contactUser.id,
-                contactUserId: userId,
-                status: ContactStatus.BLOCKED,
-              },
-              data: { status: ContactStatus.ACTIVE },
-            }),
-          ]);
-        }
+            });
+          }
 
-        matchedUsers.push(contactUser);
+          // Create or update reverse relationship (contactUserId -> userId)
+          if (!existingReverseContact) {
+            try {
+              await prisma.contact.create({
+                data: {
+                  userId: contactUser.id,
+                  contactUserId: userId,
+                  status: ContactStatus.ACTIVE,
+                },
+              });
+            } catch (createError: any) {
+              // If it's a duplicate constraint error, contact was created between check and create (race condition)
+              if (createError.code === 'P2002') {
+                console.log('[ContactsService] Reverse contact relationship already exists (race condition), continuing...');
+              } else {
+                throw createError; // Re-throw if it's a different error
+              }
+            }
+          } else if (existingReverseContact.status === ContactStatus.BLOCKED) {
+            // Reactivate if previously blocked
+            await prisma.contact.update({
+              where: { id: existingReverseContact.id },
+              data: { status: ContactStatus.ACTIVE },
+            });
+          }
+
+          matchedUsers.push(contactUser);
+        } catch (contactError: any) {
+          console.error(`[ContactsService] Error creating contact relationship with user ${contactUser.id}:`, contactError);
+          console.error(`[ContactsService] Error details:`, {
+            message: contactError?.message,
+            code: contactError?.code,
+            stack: contactError?.stack,
+          });
+          // Continue with other contacts even if one fails
+          // This prevents one failed contact from blocking all others
+        }
       }
 
-      console.log('[ContactsService] Successfully matched', matchedUsers.length, 'contacts');
+      console.log('[ContactsService] Successfully processed', otherUsers.length, 'users, matched', matchedUsers.length, 'contacts');
+      
+      // Return result even if some contacts failed (matchedUsers might be less than otherUsers)
       return {
         matched: matchedUsers.length,
         users: matchedUsers,
       };
     } catch (error: any) {
-      console.error('[ContactsService] Error matching contacts:', error);
+      console.error('[ContactsService] Fatal error matching contacts:', error);
       console.error('[ContactsService] Error stack:', error?.stack);
       console.error('[ContactsService] Error message:', error?.message);
+      console.error('[ContactsService] Error code:', error?.code);
+      
+      // If we've matched some users before the error, return partial success
+      if (matchedUsers.length > 0) {
+        console.log('[ContactsService] Returning partial success with', matchedUsers.length, 'matched users');
+        return {
+          matched: matchedUsers.length,
+          users: matchedUsers,
+        };
+      }
+      
+      // Otherwise, throw the error
       throw error;
     }
   }

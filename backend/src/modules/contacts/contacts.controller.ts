@@ -42,14 +42,25 @@ export class ContactsController {
       console.log('[ContactsController] matchContacts endpoint called');
       console.log('[ContactsController] userId:', req.userId);
       console.log('[ContactsController] phoneHashes count:', dto.phoneHashes?.length);
-      return await this.contactsService.matchContacts(req.userId, dto.phoneHashes);
+      
+      if (!req.userId) {
+        console.error('[ContactsController] No userId in request');
+        throw new Error('User not authenticated');
+      }
+      
+      const result = await this.contactsService.matchContacts(req.userId, dto.phoneHashes);
+      console.log('[ContactsController] matchContacts completed successfully:', result);
+      return result;
     } catch (error: any) {
       console.error('[ContactsController] Error in matchContacts endpoint:', error);
       console.error('[ContactsController] Error details:', {
         message: error?.message,
+        code: error?.code,
         stack: error?.stack,
         name: error?.name,
       });
+      
+      // Re-throw to let NestJS handle it with proper HTTP status
       throw error;
     }
   }
