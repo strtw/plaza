@@ -7,6 +7,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { hashPhone } from '../../common/utils/phone-hash.util';
 
 const prisma = new PrismaClient();
 
@@ -15,23 +16,22 @@ export class DevService {
   /**
    * Create mock users for the given phone numbers
    * All users will have [TEST] prefix in their name
+   * Phone numbers are hashed before storing (privacy-first design)
    */
   async createMockUsers(phoneNumbers: string[]): Promise<{ created: number; users: any[] }> {
-    const createdUsers: Array<{ id: string; phone: string; name: string }> = [];
+    const createdUsers: Array<{ id: string; name: string }> = [];
 
     for (const phone of phoneNumbers) {
-      // Normalize phone number (remove non-digits, ensure it starts with +)
-      const normalizedPhone = phone.replace(/\D/g, '');
-      const formattedPhone = normalizedPhone.startsWith('1') && normalizedPhone.length === 11
-        ? `+${normalizedPhone}`
-        : `+1${normalizedPhone}`;
+      // Hash the phone number (privacy-first design)
+      const phoneHash = hashPhone(phone);
 
       // Generate a fake Clerk ID for test users
+      const normalizedPhone = phone.replace(/\D/g, '');
       const testClerkId = `test_${normalizedPhone}`;
 
       // Create or update user with [TEST] prefix
       const existingUser = await prisma.user.findFirst({
-        where: { phone: formattedPhone },
+        where: { phoneHash },
       });
 
       const user = existingUser
@@ -45,7 +45,7 @@ export class DevService {
         : await prisma.user.create({
             data: {
               clerkId: testClerkId,
-              phone: formattedPhone,
+              phoneHash,
               name: `[TEST] User ${normalizedPhone.slice(-4)}`,
               email: `test.${normalizedPhone}@example.com`,
             },
@@ -54,8 +54,8 @@ export class DevService {
       const userName: string = user.name || `[TEST] User ${normalizedPhone.slice(-4)}`;
       createdUsers.push({
         id: user.id,
-        phone: user.phone,
         name: userName,
+        // Note: phone number not returned (privacy-first design)
       });
     }
 

@@ -38,7 +38,7 @@ plaza/
    NODE_ENV=development
    PORT=3000
    DATABASE_URL="postgresql://user:password@localhost:5432/social_availability?schema=public"
-   CLERK_SECRET_KEY=sk_test_your_key_here
+   CLERK_SECRET_KEY=sk_test_Pld4Q4uBPj6faTI6tcmsHFmm0YUQ8EasUx9OKcObPi
    CLERK_WEBHOOK_SECRET=whsec_your_webhook_secret
    APP_URL=http://localhost:3000
    ```

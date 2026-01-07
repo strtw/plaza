@@ -73,7 +73,7 @@ export class StatusService {
               id: true,
               name: true,
               email: true,
-              phone: true, // Include phone number
+              // Note: phone number is not stored in DB (privacy-first design)
             },
           },
         },

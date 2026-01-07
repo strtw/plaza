@@ -1,5 +1,5 @@
 import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, Pressable, Alert, Linking, AppState, TextInput } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
 import { useAuth } from '@clerk/clerk-expo';
@@ -10,6 +10,7 @@ import * as Contacts from 'expo-contacts';
 function HomeScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const api = createApi(getToken);
+  const queryClient = useQueryClient();
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [deviceContacts, setDeviceContacts] = useState<Array<{ name: string; phone: string }>>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
@@ -144,6 +145,38 @@ function HomeScreenContent() {
     refetchInterval: 10000, // Poll every 10 seconds
   });
 
+  // Mutation for matching contacts
+  const matchContactsMutation = useMutation({
+    mutationFn: api.matchContacts,
+    onSuccess: (data) => {
+      // Refresh contacts list
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      
+      if (data.matched > 0) {
+        Alert.alert(
+          'Contacts Matched!',
+          `Found ${data.matched} friend${data.matched !== 1 ? 's' : ''} on Plaza. They've been added to your contacts.`,
+          [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
+        );
+      } else {
+        Alert.alert(
+          'No Matches Found',
+          'None of the selected contacts are on Plaza yet. They\'ll be added when they join!',
+          [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
+        );
+      }
+    },
+    onError: (error: any) => {
+      console.error('Error matching contacts:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to match contacts. Please try again.',
+        [{ text: 'OK' }]
+      );
+    },
+  });
+
   // Merge contacts with their statuses
   const contactsWithStatus = contacts?.map((contact: any) => ({
     ...contact,
@@ -233,25 +266,29 @@ function HomeScreenContent() {
                 </Pressable>
               )}
               <Pressable
-                style={[styles.doneButton, selectedContacts.size === 0 && styles.doneButtonDisabled]}
+                style={[styles.doneButton, (selectedContacts.size === 0 || matchContactsMutation.isPending) && styles.doneButtonDisabled]}
                 onPress={() => {
-                  // Save selected contacts
                   const selected = deviceContacts.filter(contact => 
                     selectedContacts.has(contact.phone)
                   );
-                  setSavedContacts(selected);
-                  console.log('[Contacts] Saved contacts:', selected);
-                  Alert.alert(
-                    'Contacts Saved',
-                    `Saved ${selected.length} contact${selected.length !== 1 ? 's' : ''}`,
-                    [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
-                  );
+                  
+                  if (selected.length === 0) {
+                    return;
+                  }
+
+                  // Match contacts against Plaza users
+                  const phoneNumbers = selected.map(c => c.phone);
+                  matchContactsMutation.mutate(phoneNumbers);
                 }}
-                disabled={selectedContacts.size === 0}
+                disabled={selectedContacts.size === 0 || matchContactsMutation.isPending}
               >
-                <Text style={[styles.doneButtonText, selectedContacts.size === 0 && styles.doneButtonTextDisabled]}>
-                  Done {selectedContacts.size > 0 && `(${selectedContacts.size})`}
-                </Text>
+                {matchContactsMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={[styles.doneButtonText, selectedContacts.size === 0 && styles.doneButtonTextDisabled]}>
+                    Done {selectedContacts.size > 0 && `(${selectedContacts.size})`}
+                  </Text>
+                )}
               </Pressable>
             </View>
           </View>

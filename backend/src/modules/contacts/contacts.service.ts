@@ -20,7 +20,8 @@ export class ContactsService {
               id: true,
               name: true,
               email: true,
-              phone: true,
+              // Note: phone number is not stored in DB (privacy-first design)
+              // Mobile app maintains phone numbers locally
             },
           },
         },
@@ -86,6 +87,92 @@ export class ContactsService {
     ]);
 
     return { success: true };
+  }
+
+  /**
+   * Match phone hashes against existing Plaza users and create contact relationships
+   * Returns the matched users
+   * 
+   * Note: phoneNumbers parameter should be phone hashes (not raw phone numbers)
+   */
+  async matchContacts(userId: string, phoneHashes: string[]) {
+    try {
+      const matchedUsers: any[] = [];
+
+      // Find all users matching these phone hashes
+      const existingUsers = await prisma.user.findMany({
+        where: {
+          phoneHash: { in: phoneHashes },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          // Note: phone number is not stored in DB (privacy-first design)
+        },
+      });
+
+      // Filter out self
+      const otherUsers = existingUsers.filter(user => user.id !== userId);
+
+      // Create contact relationships for matched users (bidirectional)
+      for (const contactUser of otherUsers) {
+        // Check if contact relationship already exists
+        const existingContact = await prisma.contact.findFirst({
+          where: {
+            userId,
+            contactUserId: contactUser.id,
+          },
+        });
+
+        if (!existingContact) {
+          // Create bidirectional contact relationship
+          await prisma.$transaction([
+            prisma.contact.create({
+              data: {
+                userId,
+                contactUserId: contactUser.id,
+                status: ContactStatus.ACTIVE,
+              },
+            }),
+            prisma.contact.create({
+              data: {
+                userId: contactUser.id,
+                contactUserId: userId,
+                status: ContactStatus.ACTIVE,
+              },
+            }),
+          ]);
+        } else if (existingContact.status === ContactStatus.BLOCKED) {
+          // If previously blocked, reactivate
+          await prisma.$transaction([
+            prisma.contact.update({
+              where: { id: existingContact.id },
+              data: { status: ContactStatus.ACTIVE },
+            }),
+            // Also reactivate reverse relationship if it exists
+            prisma.contact.updateMany({
+              where: {
+                userId: contactUser.id,
+                contactUserId: userId,
+                status: ContactStatus.BLOCKED,
+              },
+              data: { status: ContactStatus.ACTIVE },
+            }),
+          ]);
+        }
+
+        matchedUsers.push(contactUser);
+      }
+
+      return {
+        matched: matchedUsers.length,
+        users: matchedUsers,
+      };
+    } catch (error) {
+      console.error('Error matching contacts:', error);
+      throw error;
+    }
   }
 }
 

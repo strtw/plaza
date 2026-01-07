@@ -10,9 +10,9 @@ datasource db {
 model User {
   id        String   @id @default(uuid())
   clerkId   String   @unique
-  email     String?  @unique // Optional - phone is primary identifier
+  email     String?  @unique // Optional
   name      String?
-  phone     String   @unique // Required and unique - primary identifier
+  phoneHash String   @unique // Hashed phone number for contact matching (HMAC-SHA256)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -24,6 +24,8 @@ model User {
   statuses       Status[]
   invitesCreated Invite[] @relation("InviteCreator")
   invitesUsed    Invite[] @relation("InviteUser")
+
+  @@index([phoneHash])
 }
 
 model Contact {
