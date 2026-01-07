@@ -1,15 +1,28 @@
 import React from 'react';
-import { Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { useSignIn } from '@clerk/clerk-expo';
 import { Link, useRouter } from 'expo-router';
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
-  const [emailAddress, setEmailAddress] = React.useState('');
-  const [password, setPassword] = React.useState('');
+  const [phoneNumber, setPhoneNumber] = React.useState('');
+  const [pendingVerification, setPendingVerification] = React.useState(false);
+  const [code, setCode] = React.useState('');
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
+
+  // Normalize phone number to E.164 format
+  const normalizePhone = (phone: string): string => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('1') && digits.length === 11) {
+      return `+${digits}`;
+    }
+    if (digits.length === 10) {
+      return `+1${digits}`;
+    }
+    return phone.startsWith('+') ? phone : `+1${digits}`;
+  };
 
   const onSignInPress = async () => {
     if (!isLoaded) {
@@ -17,8 +30,8 @@ export default function SignInScreen() {
       return;
     }
 
-    if (!emailAddress || !password) {
-      setError('Please enter both email and password');
+    if (!phoneNumber) {
+      setError('Please enter your phone number');
       return;
     }
 
@@ -26,16 +39,66 @@ export default function SignInScreen() {
     setLoading(true);
 
     try {
-      const completeSignIn = await signIn.create({
-        identifier: emailAddress,
-        password,
+      const normalizedPhone = normalizePhone(phoneNumber);
+      
+      // Create sign-in attempt
+      const signInAttempt = await signIn.create({
+        identifier: normalizedPhone,
       });
 
-      await setActive({ session: completeSignIn.createdSessionId });
-      router.replace('/(tabs)');
+      // Prepare phone code verification
+      await signIn.prepareFirstFactor({
+        strategy: 'phone_code',
+      });
+
+      setPendingVerification(true);
     } catch (err: any) {
       console.error('Sign in error:', JSON.stringify(err, null, 2));
-      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Failed to sign in. Please check your credentials.';
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Failed to send verification code. Please try again.';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onPressVerify = async () => {
+    if (!isLoaded) {
+      setError('Clerk is not loaded yet. Please wait...');
+      return;
+    }
+
+    if (!code) {
+      setError('Please enter the verification code');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const completeSignIn = await signIn.attemptFirstFactor({
+        strategy: 'phone_code',
+        code,
+      });
+
+      console.log('Sign in status:', completeSignIn.status);
+      console.log('Created session ID:', completeSignIn.createdSessionId);
+
+      if (completeSignIn.status === 'complete') {
+        // Set the active session - this will trigger the auth layout to redirect
+        await setActive({ session: completeSignIn.createdSessionId });
+        
+        // The auth layout will automatically redirect when isSignedIn becomes true
+        // But we'll also manually navigate as a fallback
+        setTimeout(() => {
+          router.replace('/(tabs)');
+        }, 200);
+      } else {
+        setError('Sign in is not complete. Please try again.');
+      }
+    } catch (err: any) {
+      console.error('Verification error:', JSON.stringify(err, null, 2));
+      const errorMessage = err?.errors?.[0]?.message || err?.message || 'Invalid verification code. Please try again.';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -44,63 +107,130 @@ export default function SignInScreen() {
 
   return (
     <View style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#fff' }}>
-      <TextInput
-        autoCapitalize="none"
-        value={emailAddress}
-        placeholder="Email"
-        placeholderTextColor="#999"
-        onChangeText={(emailAddress) => setEmailAddress(emailAddress)}
-        style={{
-          borderWidth: 1,
-          borderColor: '#ddd',
-          backgroundColor: '#fff',
-          color: '#000',
-          padding: 12,
-          marginBottom: 10,
-          borderRadius: 4,
-        }}
-      />
-      <TextInput
-        value={password}
-        placeholder="Password"
-        placeholderTextColor="#999"
-        secureTextEntry
-        onChangeText={(password) => setPassword(password)}
-        style={{
-          borderWidth: 1,
-          borderColor: '#ddd',
-          backgroundColor: '#fff',
-          color: '#000',
-          padding: 12,
-          marginBottom: 10,
-          borderRadius: 4,
-        }}
-      />
+      {!pendingVerification ? (
+        <>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 30, textAlign: 'center', color: '#000' }}>
+            Sign In
+          </Text>
+          
+          <TextInput
+            value={phoneNumber}
+            placeholder="Phone Number (e.g., +1234567890)"
+            placeholderTextColor="#999"
+            onChangeText={(phone) => setPhoneNumber(phone)}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            style={{
+              borderWidth: 1,
+              borderColor: '#ddd',
+              backgroundColor: '#fff',
+              color: '#000',
+              padding: 12,
+              marginBottom: 10,
+              borderRadius: 4,
+            }}
+          />
 
-      {error ? (
-        <View style={{ backgroundColor: '#fee', padding: 12, marginBottom: 10, borderRadius: 4, borderWidth: 1, borderColor: '#fcc' }}>
-          <Text style={{ color: '#c00', textAlign: 'center' }}>{error}</Text>
-        </View>
-      ) : null}
+          {error ? (
+            <View style={{ backgroundColor: '#fee', padding: 12, marginBottom: 10, borderRadius: 4, borderWidth: 1, borderColor: '#fcc' }}>
+              <Text style={{ color: '#c00', textAlign: 'center' }}>{error}</Text>
+            </View>
+          ) : null}
 
-      <TouchableOpacity
-        onPress={onSignInPress}
-        disabled={!!loading}
-        style={{
-          backgroundColor: loading ? '#999' : 'blue',
-          padding: 15,
-          borderRadius: 4,
-          opacity: loading ? 0.6 : 1,
-        }}
-      >
-        <Text style={{ color: 'white', textAlign: 'center', fontWeight: '600' }}>
-          {loading ? 'Signing in...' : 'Sign In'}
-        </Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onSignInPress}
+            disabled={loading}
+            style={{
+              backgroundColor: loading ? '#999' : '#007AFF',
+              padding: 15,
+              borderRadius: 4,
+              opacity: loading ? 0.6 : 1,
+              marginBottom: 10,
+            }}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: 'white', textAlign: 'center', fontWeight: '600' }}>
+                Send Verification Code
+              </Text>
+            )}
+          </TouchableOpacity>
 
-      <Link href="/(auth)/sign-up" style={{ marginTop: 20, textAlign: 'center' }}>
-        <Text style={{ color: '#0066cc' }}>Don't have an account? Sign up</Text>
-      </Link>
+          <Link href="/(auth)/sign-up" style={{ marginTop: 20, textAlign: 'center' }}>
+            <Text style={{ color: '#0066cc' }}>Don't have an account? Sign up</Text>
+          </Link>
+        </>
+      ) : (
+        <>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', color: '#000' }}>
+            Verify Phone Number
+          </Text>
+          
+          <Text style={{ color: '#666', fontSize: 14, marginBottom: 20, textAlign: 'center' }}>
+            We sent a verification code to{'\n'}
+            <Text style={{ fontWeight: '600', color: '#000' }}>{phoneNumber}</Text>
+          </Text>
+
+          {error ? (
+            <View style={{ backgroundColor: '#fee', padding: 12, marginBottom: 10, borderRadius: 4, borderWidth: 1, borderColor: '#fcc' }}>
+              <Text style={{ color: '#c00', textAlign: 'center' }}>{error}</Text>
+            </View>
+          ) : null}
+
+          <TextInput
+            value={code}
+            placeholder="Enter 6-digit code"
+            placeholderTextColor="#999"
+            onChangeText={(code) => setCode(code)}
+            keyboardType="number-pad"
+            maxLength={6}
+            style={{
+              borderWidth: 1,
+              borderColor: '#ddd',
+              backgroundColor: '#fff',
+              color: '#000',
+              padding: 12,
+              marginBottom: 10,
+              borderRadius: 4,
+              fontSize: 18,
+              letterSpacing: 4,
+              textAlign: 'center',
+            }}
+          />
+
+          <TouchableOpacity
+            onPress={onPressVerify}
+            disabled={loading}
+            style={{
+              backgroundColor: loading ? '#999' : '#007AFF',
+              padding: 15,
+              borderRadius: 4,
+              opacity: loading ? 0.6 : 1,
+              marginBottom: 10,
+            }}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: 'white', textAlign: 'center', fontWeight: '600' }}>
+                Verify & Sign In
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              setPendingVerification(false);
+              setCode('');
+              setError('');
+            }}
+            style={{ marginTop: 10 }}
+          >
+            <Text style={{ color: '#0066cc', textAlign: 'center' }}>Change phone number</Text>
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }
