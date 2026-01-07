@@ -72,6 +72,12 @@ export const createApi = (getToken: () => Promise<string | null>) => {
     getInvite: (code: string) => fetchApi(`/invites/${code}`),
     useInvite: (code: string) =>
       fetchApi(`/invites/${code}/use`, { method: 'POST' }),
+    // Dev endpoint - only works when NODE_ENV !== 'production'
+    createMockUsers: (phoneNumbers: string[]) =>
+      fetchApi('/dev/mock-users', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumbers }),
+      }),
   };
 };
 

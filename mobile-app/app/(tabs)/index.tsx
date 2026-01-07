@@ -189,27 +189,69 @@ function HomeScreenContent() {
             <Pressable onPress={() => setShowSyncModal(false)}>
               <Text style={styles.modalCloseButton}>Close</Text>
             </Pressable>
-            <Pressable
-              style={[styles.doneButton, selectedContacts.size === 0 && styles.doneButtonDisabled]}
-              onPress={() => {
-                // Save selected contacts
-                const selected = deviceContacts.filter(contact => 
-                  selectedContacts.has(contact.phone)
-                );
-                setSavedContacts(selected);
-                console.log('[Contacts] Saved contacts:', selected);
-                Alert.alert(
-                  'Contacts Saved',
-                  `Saved ${selected.length} contact${selected.length !== 1 ? 's' : ''}`,
-                  [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
-                );
-              }}
-              disabled={selectedContacts.size === 0}
-            >
-              <Text style={[styles.doneButtonText, selectedContacts.size === 0 && styles.doneButtonTextDisabled]}>
-                Done {selectedContacts.size > 0 && `(${selectedContacts.size})`}
-              </Text>
-            </Pressable>
+            <View style={styles.headerButtons}>
+              {/* Dev button - only show if API URL contains 'dev' or localhost */}
+              {((process.env.EXPO_PUBLIC_API_URL?.includes('dev') || 
+                 process.env.EXPO_PUBLIC_API_URL?.includes('localhost')) || 
+                 __DEV__) && (
+                <Pressable
+                  style={[styles.devButton, selectedContacts.size === 0 && styles.devButtonDisabled]}
+                  onPress={async () => {
+                    const selected = deviceContacts.filter(contact => 
+                      selectedContacts.has(contact.phone)
+                    );
+                    
+                    if (selected.length === 0) {
+                      Alert.alert('No Contacts Selected', 'Please select contacts first.');
+                      return;
+                    }
+
+                    try {
+                      const phoneNumbers = selected.map(c => c.phone);
+                      const result = await api.createMockUsers(phoneNumbers);
+                      Alert.alert(
+                        'Mock Users Created',
+                        `Created ${result.created} test user${result.created !== 1 ? 's' : ''}.\n\nThey will appear as existing Plaza users.`,
+                        [{ text: 'OK' }]
+                      );
+                    } catch (error: any) {
+                      console.error('Error creating mock users:', error);
+                      Alert.alert(
+                        'Error',
+                        error.message || 'Failed to create mock users. Make sure you\'re connected to the dev environment.',
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  }}
+                  disabled={selectedContacts.size === 0}
+                >
+                  <Text style={[styles.devButtonText, selectedContacts.size === 0 && styles.devButtonTextDisabled]}>
+                    Create Mock Users
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable
+                style={[styles.doneButton, selectedContacts.size === 0 && styles.doneButtonDisabled]}
+                onPress={() => {
+                  // Save selected contacts
+                  const selected = deviceContacts.filter(contact => 
+                    selectedContacts.has(contact.phone)
+                  );
+                  setSavedContacts(selected);
+                  console.log('[Contacts] Saved contacts:', selected);
+                  Alert.alert(
+                    'Contacts Saved',
+                    `Saved ${selected.length} contact${selected.length !== 1 ? 's' : ''}`,
+                    [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
+                  );
+                }}
+                disabled={selectedContacts.size === 0}
+              >
+                <Text style={[styles.doneButtonText, selectedContacts.size === 0 && styles.doneButtonTextDisabled]}>
+                  Done {selectedContacts.size > 0 && `(${selectedContacts.size})`}
+                </Text>
+              </Pressable>
+            </View>
           </View>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Sync Contacts</Text>
@@ -359,6 +401,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#007AFF',
     fontWeight: '600',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  devButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FF9500',
+  },
+  devButtonDisabled: {
+    backgroundColor: '#e0e0e0',
+  },
+  devButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  devButtonTextDisabled: {
+    color: '#999',
   },
   doneButton: {
     paddingHorizontal: 16,
