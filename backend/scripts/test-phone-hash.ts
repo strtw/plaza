@@ -50,3 +50,4 @@ console.log(`   Different hashes? ${hash1_diff !== hash2_diff ? '✓ YES' : '✗
 
 console.log('\n✓ All tests passed!');
 
+

@@ -24,6 +24,8 @@ model User {
   statuses       Status[]
   invitesCreated Invite[] @relation("InviteCreator")
   invitesUsed    Invite[] @relation("InviteUser")
+  selectedContacts SelectedContact[] @relation("UserSelectedContacts")
+  selectedContactsAsPlazaUser SelectedContact[] @relation("SelectedContactPlazaUser")
 
   @@index([phoneHash])
 }
@@ -85,4 +87,22 @@ model Invite {
 
   @@index([code])
   @@index([inviterId])
+}
+
+model SelectedContact {
+  id        String   @id @default(uuid())
+  userId    String   // User who selected this contact
+  phoneHash String   // Hashed phone number
+  name      String   // Name from device contacts
+  plazaUserId String? // If this contact is a Plaza user, link to User
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User  @relation("UserSelectedContacts", fields: [userId], references: [id], onDelete: Cascade)
+  plazaUser User? @relation("SelectedContactPlazaUser", fields: [plazaUserId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, phoneHash])
+  @@index([userId])
+  @@index([phoneHash])
+  @@index([plazaUserId])
 }

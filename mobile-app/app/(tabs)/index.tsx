@@ -396,7 +396,7 @@ function HomeScreenContent() {
                   }
 
                   try {
-                    // Step 1: Save all selected contacts (even if not Plaza users)
+                    // Step 1: Save selected contacts (only Plaza users can be selected)
                     console.log('[Contact Sync] Step 1: Saving selected contacts...');
                     await api.saveSelectedContacts(selected);
                     console.log('[Contact Sync] Step 1: Saved', selected.length, 'selected contacts');
@@ -407,31 +407,14 @@ function HomeScreenContent() {
                     const phoneHashes = await hashPhones(phoneNumbers, api.hashPhones);
                     console.log('[Contact Sync] Step 2: Hashed', phoneHashes.length, 'phone numbers');
                     
-                    // Step 3: Check which are existing users
-                    console.log('[Contact Sync] Step 3: Checking which are Plaza users...');
-                    const checkResult = await checkContactsMutation.mutateAsync(phoneHashes);
-                    console.log('[Contact Sync] Step 3: Found', checkResult.existingUsers.length, 'existing users');
+                    // Step 3: Match contacts (all selected contacts are Plaza users)
+                    console.log('[Contact Sync] Step 3: Matching contacts...');
+                    await matchContactsMutation.mutateAsync(phoneHashes);
+                    console.log('[Contact Sync] Step 3: Contacts matched successfully');
                     
-                    // Step 4: For existing users, add them as contacts
-                    if (checkResult.existingUsers.length > 0) {
-                      console.log('[Contact Sync] Step 4: Matching contacts...');
-                      const existingUserHashes = checkResult.existingUsers.map(u => u.phoneHash);
-                      await matchContactsMutation.mutateAsync(existingUserHashes);
-                      console.log('[Contact Sync] Step 4: Contacts matched successfully');
-                    }
-                    
-                    // Step 5: Show results
-                    const existingCount = checkResult.existingUsers.length;
-                    const nonUserCount = checkResult.nonUserHashes.length;
-                    
-                    let message = '';
-                    if (existingCount > 0 && nonUserCount > 0) {
-                      message = `Added ${existingCount} friend${existingCount !== 1 ? 's' : ''} on Plaza. ${nonUserCount} contact${nonUserCount !== 1 ? 's' : ''} saved - invite them to join!`;
-                    } else if (existingCount > 0) {
-                      message = `Added ${existingCount} friend${existingCount !== 1 ? 's' : ''} on Plaza!`;
-                    } else {
-                      message = `Saved ${nonUserCount} contact${nonUserCount !== 1 ? 's' : ''}. Invite them to join Plaza!`;
-                    }
+                    // Step 4: Show results
+                    const count = selected.length;
+                    const message = `Added ${count} friend${count !== 1 ? 's' : ''} on Plaza!`;
                     
                     Alert.alert(
                       'Contacts Saved',
@@ -458,15 +441,15 @@ function HomeScreenContent() {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={[styles.doneButtonText, selectedContacts.size === 0 && styles.doneButtonTextDisabled]}>
-                    Done {selectedContacts.size > 0 && `(${selectedContacts.size})`}
+                    Add {selectedContacts.size > 0 && `(${selectedContacts.size})`}
                   </Text>
                 )}
               </Pressable>
             </View>
           </View>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Sync Contacts</Text>
-            <Text style={styles.modalSubtitle}>Find friends who are already on Plaza</Text>
+            <Text style={styles.modalTitle}>Find friends</Text>
+            <Text style={styles.modalSubtitle}>See which contacts are already on Plaza</Text>
             
             {/* Search Bar */}
             {!isLoadingContacts && deviceContacts.length > 0 && (
@@ -529,6 +512,27 @@ function HomeScreenContent() {
 
               const renderContactItem = (item: { name: string; phone: string }, isInPlaza: boolean) => {
                 const isSelected = selectedContacts.has(item.phone);
+                
+                // Only Plaza users can be selected
+                if (!isInPlaza) {
+                  return (
+                    <View style={styles.contactItem}>
+                      <View style={styles.contactInfo}>
+                        <View style={styles.contactNameRow}>
+                          <Text style={styles.contactName}>{item.name}</Text>
+                          <Pressable
+                            onPress={() => handleInviteContact(item)}
+                          >
+                            <Text style={styles.inviteLink}>Invite</Text>
+                          </Pressable>
+                        </View>
+                        <Text style={styles.contactPhone}>{item.phone}</Text>
+                      </View>
+                    </View>
+                  );
+                }
+                
+                // Plaza users can be selected
                 return (
                   <Pressable
                     style={styles.contactItem}
@@ -548,20 +552,9 @@ function HomeScreenContent() {
                     <View style={styles.contactInfo}>
                       <View style={styles.contactNameRow}>
                         <Text style={styles.contactName}>{item.name}</Text>
-                        {isInPlaza ? (
-                          <View style={styles.plazaBadge}>
-                            <Text style={styles.plazaBadgeText}>On Plaza</Text>
-                          </View>
-                        ) : (
-                          <Pressable
-                            onPress={(e) => {
-                              e.stopPropagation(); // Prevent selecting the contact
-                              handleInviteContact(item);
-                            }}
-                          >
-                            <Text style={styles.inviteLink}>Invite</Text>
-                          </Pressable>
-                        )}
+                        <View style={styles.plazaBadge}>
+                          <Text style={styles.plazaBadgeText}>On Plaza</Text>
+                        </View>
                       </View>
                       <Text style={styles.contactPhone}>{item.phone}</Text>
                     </View>
