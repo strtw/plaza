@@ -98,11 +98,14 @@ export class ContactsService {
    */
   async matchContacts(userId: string, phoneHashes: string[]) {
     try {
+      console.log('[ContactsService] matchContacts called with userId:', userId, 'phoneHashes count:', phoneHashes?.length);
+      
       if (!userId) {
         throw new Error('userId is required');
       }
 
       if (!phoneHashes || phoneHashes.length === 0) {
+        console.log('[ContactsService] No phone hashes provided, returning empty result');
         return {
           matched: 0,
           users: [],
@@ -112,10 +115,13 @@ export class ContactsService {
       const matchedUsers: any[] = [];
 
       // Find all users matching these phone hashes (use service method for consistency)
+      console.log('[ContactsService] Finding users by phone hashes...');
       const existingUsers = await this.usersService.findByPhoneHashes(phoneHashes);
+      console.log('[ContactsService] Found', existingUsers.length, 'users matching hashes');
 
       // Filter out self
       const otherUsers = existingUsers.filter(user => user.id !== userId);
+      console.log('[ContactsService] After filtering self,', otherUsers.length, 'users to add as contacts');
 
       // Create contact relationships for matched users (bidirectional)
       for (const contactUser of otherUsers) {
@@ -167,12 +173,15 @@ export class ContactsService {
         matchedUsers.push(contactUser);
       }
 
+      console.log('[ContactsService] Successfully matched', matchedUsers.length, 'contacts');
       return {
         matched: matchedUsers.length,
         users: matchedUsers,
       };
-    } catch (error) {
-      console.error('Error matching contacts:', error);
+    } catch (error: any) {
+      console.error('[ContactsService] Error matching contacts:', error);
+      console.error('[ContactsService] Error stack:', error?.stack);
+      console.error('[ContactsService] Error message:', error?.message);
       throw error;
     }
   }

@@ -39,9 +39,17 @@ export class ContactsController {
   @Post('match')
   async matchContacts(@Request() req, @Body() dto: MatchContactsDto) {
     try {
+      console.log('[ContactsController] matchContacts endpoint called');
+      console.log('[ContactsController] userId:', req.userId);
+      console.log('[ContactsController] phoneHashes count:', dto.phoneHashes?.length);
       return await this.contactsService.matchContacts(req.userId, dto.phoneHashes);
     } catch (error: any) {
-      console.error('Error in matchContacts endpoint:', error);
+      console.error('[ContactsController] Error in matchContacts endpoint:', error);
+      console.error('[ContactsController] Error details:', {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+      });
       throw error;
     }
   }

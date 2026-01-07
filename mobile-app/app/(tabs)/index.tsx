@@ -322,16 +322,22 @@ function HomeScreenContent() {
 
                   try {
                     // Step 1: Hash the phone numbers
+                    console.log('[Contact Sync] Step 1: Hashing phone numbers...');
                     const phoneNumbers = selected.map(c => c.phone);
                     const phoneHashes = await hashPhones(phoneNumbers, api.hashPhones);
+                    console.log('[Contact Sync] Step 1: Hashed', phoneHashes.length, 'phone numbers');
                     
                     // Step 2: Check which are existing users
+                    console.log('[Contact Sync] Step 2: Checking which are Plaza users...');
                     const checkResult = await checkContactsMutation.mutateAsync(phoneHashes);
+                    console.log('[Contact Sync] Step 2: Found', checkResult.existingUsers.length, 'existing users');
                     
                     // Step 3: For existing users, add them as contacts
                     if (checkResult.existingUsers.length > 0) {
+                      console.log('[Contact Sync] Step 3: Matching contacts...');
                       const existingUserHashes = checkResult.existingUsers.map(u => u.phoneHash);
                       await matchContactsMutation.mutateAsync(existingUserHashes);
+                      console.log('[Contact Sync] Step 3: Contacts matched successfully');
                     }
                     
                     // Step 4: Show results
