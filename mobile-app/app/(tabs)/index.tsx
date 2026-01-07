@@ -6,6 +6,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { Redirect } from 'expo-router';
 import { useEffect, useState, useRef } from 'react';
 import * as Contacts from 'expo-contacts';
+import * as Clipboard from 'expo-clipboard';
 import { hashPhones } from '../../lib/phone-hash.util';
 
 function HomeScreenContent() {
@@ -90,6 +91,65 @@ function HomeScreenContent() {
       setDeviceContacts([]);
     } finally {
       setIsLoadingContacts(false);
+    }
+  };
+
+  // Function to handle inviting a contact
+  const handleInviteContact = async (contact: { name: string; phone: string }) => {
+    try {
+      // Generate invite code using the API
+      let inviteCode: string;
+      try {
+        const inviteResult = await api.generateInvite();
+        inviteCode = inviteResult.code;
+      } catch (apiError: any) {
+        console.error('Error generating invite from API:', apiError);
+        // Fallback: generate a temporary code (user can still share)
+        const chars = '0123456789abcdef';
+        inviteCode = '';
+        for (let i = 0; i < 32; i++) {
+          inviteCode += chars[Math.floor(Math.random() * chars.length)];
+        }
+      }
+      
+      // Normalize phone number for SMS (ensure it starts with +)
+      const normalizedPhone = contact.phone.startsWith('+') 
+        ? contact.phone 
+        : contact.phone.length === 10 
+          ? `+1${contact.phone}` 
+          : `+${contact.phone}`;
+      
+      // Create invite message
+      const appStoreUrl = 'https://apps.apple.com/app/id/YOUR_APP_ID'; // Replace with real URL
+      const message = `Join me on Plaza! Download here: ${appStoreUrl}\n\nInvite code: ${inviteCode}`;
+      
+      // Encode the message for URL
+      const encodedMessage = encodeURIComponent(message);
+      
+      // Open native SMS app with pre-filled recipient and message
+      const smsUrl = `sms:${normalizedPhone}?body=${encodedMessage}`;
+      
+      const canOpen = await Linking.canOpenURL(smsUrl);
+      if (canOpen) {
+        await Linking.openURL(smsUrl);
+      } else {
+        // Fallback: try without body (some devices may not support body parameter)
+        await Linking.openURL(`sms:${normalizedPhone}`);
+        // Copy message to clipboard as fallback
+        await Clipboard.setStringAsync(message);
+        Alert.alert(
+          'SMS Opened',
+          `Message copied to clipboard. Paste it in the SMS to ${contact.name}.`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error: any) {
+      console.error('Error inviting contact:', error);
+      Alert.alert(
+        'Error',
+        `Unable to open SMS. Please send an invite manually to ${contact.name} at ${contact.phone}.`,
+        [{ text: 'OK' }]
+      );
     }
   };
 
@@ -436,79 +496,120 @@ function HomeScreenContent() {
                 <ActivityIndicator size="large" color="#007AFF" />
                 <Text style={styles.loadingText}>Loading contacts...</Text>
               </View>
-            ) : (
-              <FlatList
-                data={deviceContacts.filter(contact => {
-                  if (!searchQuery.trim()) return true;
-                  const query = searchQuery.toLowerCase();
-                  return (
-                    contact.name.toLowerCase().includes(query) ||
-                    contact.phone.includes(query)
-                  );
-                })}
-                keyExtractor={(item, index) => `${item.phone}-${index}`}
-                renderItem={({ item }) => {
-                  const isSelected = selectedContacts.has(item.phone);
-                  const isInPlaza = contactsInPlaza.has(item.phone);
-                  return (
-                    <Pressable
-                      style={styles.contactItem}
-                      onPress={() => {
-                        const newSelected = new Set(selectedContacts);
-                        if (isSelected) {
-                          newSelected.delete(item.phone);
-                        } else {
-                          newSelected.add(item.phone);
-                        }
-                        setSelectedContacts(newSelected);
-                      }}
-                    >
-                      <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
-                        {isSelected && <View style={styles.checkboxInner} />}
+            ) : (() => {
+              // Filter and partition contacts
+              const filteredContacts = deviceContacts.filter(contact => {
+                if (!searchQuery.trim()) return true;
+                const query = searchQuery.toLowerCase();
+                return (
+                  contact.name.toLowerCase().includes(query) ||
+                  contact.phone.includes(query)
+                );
+              });
+
+              const plazaUsers = filteredContacts.filter(contact => contactsInPlaza.has(contact.phone));
+              const nonPlazaUsers = filteredContacts.filter(contact => !contactsInPlaza.has(contact.phone));
+
+              const renderContactItem = (item: { name: string; phone: string }, isInPlaza: boolean) => {
+                const isSelected = selectedContacts.has(item.phone);
+                return (
+                  <Pressable
+                    style={styles.contactItem}
+                    onPress={() => {
+                      const newSelected = new Set(selectedContacts);
+                      if (isSelected) {
+                        newSelected.delete(item.phone);
+                      } else {
+                        newSelected.add(item.phone);
+                      }
+                      setSelectedContacts(newSelected);
+                    }}
+                  >
+                    <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
+                      {isSelected && <View style={styles.checkboxInner} />}
+                    </View>
+                    <View style={styles.contactInfo}>
+                      <View style={styles.contactNameRow}>
+                        <Text style={styles.contactName}>{item.name}</Text>
+                        {isInPlaza ? (
+                          <View style={styles.plazaBadge}>
+                            <Text style={styles.plazaBadgeText}>On Plaza</Text>
+                          </View>
+                        ) : (
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation(); // Prevent selecting the contact
+                              handleInviteContact(item);
+                            }}
+                          >
+                            <Text style={styles.inviteLink}>Invite</Text>
+                          </Pressable>
+                        )}
                       </View>
-                      <View style={styles.contactInfo}>
-                        <View style={styles.contactNameRow}>
-                          <Text style={styles.contactName}>{item.name}</Text>
-                          {isInPlaza && (
-                            <View style={styles.plazaBadge}>
-                              <Text style={styles.plazaBadgeText}>On Plaza</Text>
-                            </View>
-                          )}
+                      <Text style={styles.contactPhone}>{item.phone}</Text>
+                    </View>
+                  </Pressable>
+                );
+              };
+
+              type ListItem = 
+                | { type: 'header'; title: string; key: string }
+                | { type: 'contact'; contact: { name: string; phone: string }; isPlaza: boolean };
+
+              const listData: ListItem[] = [
+                ...(plazaUsers.length > 0 ? [{ type: 'header' as const, title: 'On Plaza', key: 'plaza-header' }] : []),
+                ...plazaUsers.map(c => ({ type: 'contact' as const, contact: c, isPlaza: true })),
+                ...(nonPlazaUsers.length > 0 ? [{ type: 'header' as const, title: 'Not on Plaza', key: 'non-plaza-header' }] : []),
+                ...nonPlazaUsers.map(c => ({ type: 'contact' as const, contact: c, isPlaza: false })),
+              ];
+
+              return (
+                <FlatList
+                  data={listData}
+                  keyExtractor={(item, index) => {
+                    if (item.type === 'header') return item.key;
+                    return `${item.contact.phone}-${index}`;
+                  }}
+                  renderItem={({ item }) => {
+                    if (item.type === 'header') {
+                      return (
+                        <View style={styles.sectionHeader}>
+                          <Text style={styles.sectionHeaderText}>{item.title}</Text>
                         </View>
-                        <Text style={styles.contactPhone}>{item.phone}</Text>
-                      </View>
-                    </Pressable>
-                  );
-                }}
-                ListEmptyComponent={
-                  <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>
-                      {searchQuery.trim() 
-                        ? `No contacts found matching "${searchQuery}"` 
-                        : 'No contacts found'}
-                    </Text>
-                    {needsFullAccess && (
-                      <Pressable
-                        style={styles.settingsButton}
-                        onPress={async () => {
-                          try {
-                            await Linking.openSettings();
-                          } catch (error) {
-                            console.error('Error opening settings:', error);
-                            Alert.alert(
-                              'Unable to Open Settings',
-                              'Please go to Settings > Privacy & Security > Contacts and grant full access to this app.'
-                            );
-                          }
-                        }}
-                      >
-                        <Text style={styles.settingsButtonText}>Open Settings to Grant Full Access</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                }
-              />
-            )}
+                      );
+                    }
+                    return renderContactItem(item.contact, item.isPlaza);
+                  }}
+                  ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                      <Text style={styles.emptyText}>
+                        {searchQuery.trim() 
+                          ? `No contacts found matching "${searchQuery}"` 
+                          : 'No contacts found'}
+                      </Text>
+                      {needsFullAccess && (
+                        <Pressable
+                          style={styles.settingsButton}
+                          onPress={async () => {
+                            try {
+                              await Linking.openSettings();
+                            } catch (error) {
+                              console.error('Error opening settings:', error);
+                              Alert.alert(
+                                'Unable to Open Settings',
+                                'Please go to Settings > Privacy & Security > Contacts and grant full access to this app.'
+                              );
+                            }
+                          }}
+                        >
+                          <Text style={styles.settingsButtonText}>Open Settings to Grant Full Access</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  }
+                />
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -701,6 +802,24 @@ const styles = StyleSheet.create({
   contactPhone: {
     fontSize: 14,
     color: '#666',
+  },
+  sectionHeader: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  sectionHeaderText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    textTransform: 'uppercase',
+  },
+  inviteLink: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
   },
   emptyContainer: {
     padding: 40,

@@ -8,8 +8,24 @@ export class InvitesController {
 
   @Post('generate')
   @UseGuards(AuthGuard)
-  generateInvite(@Request() req) {
-    return this.invitesService.generateInvite(req.userId);
+  async generateInvite(@Request() req) {
+    try {
+      console.log('[InvitesController] generateInvite called with userId:', req.userId);
+      if (!req.userId) {
+        throw new Error('User not authenticated');
+      }
+      const result = await this.invitesService.generateInvite(req.userId);
+      console.log('[InvitesController] Invite generated successfully:', result.code);
+      return result;
+    } catch (error: any) {
+      console.error('[InvitesController] Error generating invite:', error);
+      console.error('[InvitesController] Error details:', {
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+      });
+      throw error;
+    }
   }
 
   @Get(':code')
