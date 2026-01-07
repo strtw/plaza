@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, Modal, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '../lib/api';
@@ -20,6 +20,14 @@ export function InviteDetectedModal({ visible, inviteCode, onClose, onAccept }: 
     queryKey: ['invite', inviteCode],
     queryFn: () => api.getInvite(inviteCode),
     enabled: visible && !!inviteCode,
+    retry: false, // Don't retry on 404 errors
+    // Silently handle 404 errors - they're expected when clipboard contains invalid codes
+    onError: (err: any) => {
+      // Only log non-404 errors
+      if (!err?.message?.includes('404') && !err?.message?.includes('not found')) {
+        console.error('Error fetching invite:', err);
+      }
+    },
   });
 
   const useInviteMutation = useMutation({
@@ -37,6 +45,20 @@ export function InviteDetectedModal({ visible, inviteCode, onClose, onAccept }: 
     useInviteMutation.mutate();
   };
 
+  // Automatically close modal if invite is not found (404) - false positive from clipboard
+  useEffect(() => {
+    if (error && !isLoading) {
+      const isNotFound = error?.message?.includes('404') || 
+                        error?.message?.includes('not found') ||
+                        error?.message?.includes('Not Found');
+      
+      if (isNotFound) {
+        // Silently close modal for 404 errors (false positive from clipboard detection)
+        onClose();
+      }
+    }
+  }, [error, isLoading, onClose]);
+
   return (
     <Modal
       visible={visible}
@@ -51,17 +73,7 @@ export function InviteDetectedModal({ visible, inviteCode, onClose, onAccept }: 
               <ActivityIndicator size="large" color="#007AFF" />
               <Text style={styles.loadingText}>Checking invite...</Text>
             </View>
-          ) : error || !invite ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorTitle}>Invalid Invite</Text>
-              <Text style={styles.errorText}>
-                This invite code is invalid or has expired.
-              </Text>
-              <Pressable onPress={onClose} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>Close</Text>
-              </Pressable>
-            </View>
-          ) : (
+          ) : invite ? (
             <>
               <Text style={styles.title}>Invite Detected!</Text>
               <Text style={styles.subtitle}>
@@ -88,7 +100,32 @@ export function InviteDetectedModal({ visible, inviteCode, onClose, onAccept }: 
                 </Pressable>
               </View>
             </>
-          )}
+          ) : error ? (
+            // Only show error for non-404 errors (404s are handled by useEffect to close modal)
+            (() => {
+              const isNotFound = error?.message?.includes('404') || 
+                                error?.message?.includes('not found') ||
+                                error?.message?.includes('Not Found');
+              
+              // Don't render anything for 404s - modal will be closed by useEffect
+              if (isNotFound) {
+                return null;
+              }
+              
+              // For other errors, show error message
+              return (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorTitle}>Invalid Invite</Text>
+                  <Text style={styles.errorText}>
+                    This invite code is invalid or has expired.
+                  </Text>
+                  <Pressable onPress={onClose} style={styles.closeButton}>
+                    <Text style={styles.closeButtonText}>Close</Text>
+                  </Pressable>
+                </View>
+              );
+            })()
+          ) : null}
         </View>
       </View>
     </Modal>
