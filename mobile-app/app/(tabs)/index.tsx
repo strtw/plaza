@@ -1,4 +1,4 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, Pressable, Alert, Linking, AppState } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, Pressable, Alert, Linking, AppState, TextInput } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
@@ -16,6 +16,7 @@ function HomeScreenContent() {
   const [needsFullAccess, setNeedsFullAccess] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [savedContacts, setSavedContacts] = useState<Array<{ name: string; phone: string }>>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const appState = useRef(AppState.currentState);
 
   // Function to load contacts
@@ -94,6 +95,7 @@ function HomeScreenContent() {
       setIsLoadingContacts(false);
       setNeedsFullAccess(false);
       setSelectedContacts(new Set());
+      setSearchQuery('');
     }
   }, [showSyncModal]);
 
@@ -257,6 +259,21 @@ function HomeScreenContent() {
             <Text style={styles.modalTitle}>Sync Contacts</Text>
             <Text style={styles.modalSubtitle}>Find friends who are already on Plaza</Text>
             
+            {/* Search Bar */}
+            {!isLoadingContacts && deviceContacts.length > 0 && (
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search contacts..."
+                  placeholderTextColor="#999"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            )}
+            
             {needsFullAccess && (
               <View style={styles.permissionWarningBox}>
                 <Text style={styles.permissionWarningTitle}>Limited Contact Access</Text>
@@ -289,7 +306,14 @@ function HomeScreenContent() {
               </View>
             ) : (
               <FlatList
-                data={deviceContacts}
+                data={deviceContacts.filter(contact => {
+                  if (!searchQuery.trim()) return true;
+                  const query = searchQuery.toLowerCase();
+                  return (
+                    contact.name.toLowerCase().includes(query) ||
+                    contact.phone.includes(query)
+                  );
+                })}
                 keyExtractor={(item, index) => `${item.phone}-${index}`}
                 renderItem={({ item }) => {
                   const isSelected = selectedContacts.has(item.phone);
@@ -318,7 +342,11 @@ function HomeScreenContent() {
                 }}
                 ListEmptyComponent={
                   <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>No contacts found</Text>
+                    <Text style={styles.emptyText}>
+                      {searchQuery.trim() 
+                        ? `No contacts found matching "${searchQuery}"` 
+                        : 'No contacts found'}
+                    </Text>
                     {needsFullAccess && (
                       <Pressable
                         style={styles.settingsButton}
@@ -454,6 +482,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginBottom: 20,
+  },
+  searchContainer: {
+    marginBottom: 16,
+  },
+  searchInput: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#000',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   loadingContainer: {
     flex: 1,
