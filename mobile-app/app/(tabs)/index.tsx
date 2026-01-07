@@ -6,6 +6,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { Redirect } from 'expo-router';
 import { useEffect, useState, useRef } from 'react';
 import * as Contacts from 'expo-contacts';
+import { hashPhones } from '../../lib/phone-hash.util';
 
 function HomeScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
@@ -145,7 +146,12 @@ function HomeScreenContent() {
     refetchInterval: 10000, // Poll every 10 seconds
   });
 
-  // Mutation for matching contacts
+  // Mutation for checking which contacts are users
+  const checkContactsMutation = useMutation({
+    mutationFn: api.checkContacts,
+  });
+
+  // Mutation for matching contacts (now uses phone hashes)
   const matchContactsMutation = useMutation({
     mutationFn: api.matchContacts,
     onSuccess: (data) => {
@@ -157,12 +163,6 @@ function HomeScreenContent() {
         Alert.alert(
           'Contacts Matched!',
           `Found ${data.matched} friend${data.matched !== 1 ? 's' : ''} on Plaza. They've been added to your contacts.`,
-          [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
-        );
-      } else {
-        Alert.alert(
-          'No Matches Found',
-          'None of the selected contacts are on Plaza yet. They\'ll be added when they join!',
           [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
         );
       }
@@ -266,8 +266,8 @@ function HomeScreenContent() {
                 </Pressable>
               )}
               <Pressable
-                style={[styles.doneButton, (selectedContacts.size === 0 || matchContactsMutation.isPending) && styles.doneButtonDisabled]}
-                onPress={() => {
+                style={[styles.doneButton, (selectedContacts.size === 0 || matchContactsMutation.isPending || checkContactsMutation.isPending) && styles.doneButtonDisabled]}
+                onPress={async () => {
                   const selected = deviceContacts.filter(contact => 
                     selectedContacts.has(contact.phone)
                   );
@@ -276,13 +276,54 @@ function HomeScreenContent() {
                     return;
                   }
 
-                  // Match contacts against Plaza users
-                  const phoneNumbers = selected.map(c => c.phone);
-                  matchContactsMutation.mutate(phoneNumbers);
+                  try {
+                    // Step 1: Hash the phone numbers
+                    const phoneNumbers = selected.map(c => c.phone);
+                    const phoneHashes = await hashPhones(phoneNumbers, api.hashPhones);
+                    
+                    // Step 2: Check which are existing users
+                    const checkResult = await checkContactsMutation.mutateAsync(phoneHashes);
+                    
+                    // Step 3: For existing users, add them as contacts
+                    if (checkResult.existingUsers.length > 0) {
+                      const existingUserHashes = checkResult.existingUsers.map(u => u.phoneHash);
+                      await matchContactsMutation.mutateAsync(existingUserHashes);
+                    }
+                    
+                    // Step 4: Show results
+                    const existingCount = checkResult.existingUsers.length;
+                    const nonUserCount = checkResult.nonUserHashes.length;
+                    
+                    let message = '';
+                    if (existingCount > 0 && nonUserCount > 0) {
+                      message = `Added ${existingCount} friend${existingCount !== 1 ? 's' : ''} on Plaza. ${nonUserCount} contact${nonUserCount !== 1 ? 's' : ''} not on Plaza yet - invite them to join!`;
+                    } else if (existingCount > 0) {
+                      message = `Added ${existingCount} friend${existingCount !== 1 ? 's' : ''} on Plaza!`;
+                    } else {
+                      message = `${nonUserCount} contact${nonUserCount !== 1 ? 's' : ''} not on Plaza yet. Invite them to join!`;
+                    }
+                    
+                    Alert.alert(
+                      'Contacts Synced',
+                      message,
+                      [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
+                    );
+                    
+                    // Refresh contacts list
+                    queryClient.invalidateQueries({ queryKey: ['contacts'] });
+                    queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+                  } catch (error: any) {
+                    console.error('Error syncing contacts:', error);
+                    Alert.alert(
+                      'Error',
+                      error.message || 'Failed to sync contacts. Please try again.',
+                      [{ text: 'OK' }]
+                    );
+                  }
                 }}
-                disabled={selectedContacts.size === 0 || matchContactsMutation.isPending}
+                disabled={selectedContacts.size === 0 || matchContactsMutation.isPending || checkContactsMutation.isPending}
               >
-                {matchContactsMutation.isPending ? (
+                {(matchContactsMutation.isPending || checkContactsMutation.isPending) ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={[styles.doneButtonText, selectedContacts.size === 0 && styles.doneButtonTextDisabled]}>

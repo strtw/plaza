@@ -73,10 +73,21 @@ export const createApi = (getToken: () => Promise<string | null>) => {
     getInvite: (code: string) => fetchApi(`/invites/${code}`),
     useInvite: (code: string) =>
       fetchApi(`/invites/${code}/use`, { method: 'POST' }),
-    matchContacts: (phoneNumbers: string[]) =>
-      fetchApi('/contacts/match', {
+    // Hash phone numbers on backend (privacy-first: backend hashes, doesn't store raw numbers)
+    hashPhones: (phoneNumbers: string[]) =>
+      fetchApi('/contacts/hash-phones', {
         method: 'POST',
         body: JSON.stringify({ phoneNumbers }),
+      }),
+    checkContacts: (phoneHashes: string[]) =>
+      fetchApi('/contacts/check', {
+        method: 'POST',
+        body: JSON.stringify({ phoneHashes }),
+      }),
+    matchContacts: (phoneHashes: string[]) =>
+      fetchApi('/contacts/match', {
+        method: 'POST',
+        body: JSON.stringify({ phoneHashes }),
       }),
     // Dev endpoint - only works when NODE_ENV !== 'production'
     createMockUsers: (phoneNumbers: string[]) =>

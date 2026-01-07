@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaClient, ContactStatus } from '@prisma/client';
 import { UsersService } from '../users/users.service';
+import { hashPhone, normalizePhone } from '../../common/utils/phone-hash.util';
 
 const prisma = new PrismaClient();
 
@@ -171,6 +172,49 @@ export class ContactsService {
       };
     } catch (error) {
       console.error('Error matching contacts:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Hash phone numbers (for mobile app - MVP approach)
+   * TODO: Move to client-side hashing for better privacy
+   */
+  async hashPhones(phoneNumbers: string[]): Promise<string[]> {
+    try {
+      return phoneNumbers.map(phone => {
+        const normalized = normalizePhone(phone);
+        return hashPhone(normalized);
+      });
+    } catch (error) {
+      console.error('Error hashing phone numbers:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check which of the provided phone hashes correspond to existing users in Plaza.
+   * Returns two lists: existing users and phone hashes that are not users.
+   * This is used by the UI to show different options (add contact vs invite).
+   */
+  async checkContacts(phoneHashes: string[]) {
+    try {
+      const existingUsers = await this.usersService.findByPhoneHashes(phoneHashes);
+      const existingUserHashes = new Set(existingUsers.map(u => u.phoneHash));
+
+      const nonUserHashes = phoneHashes.filter(hash => !existingUserHashes.has(hash));
+
+      return {
+        existingUsers: existingUsers.map(u => ({ 
+          id: u.id, 
+          name: u.name, 
+          email: u.email,
+          phoneHash: u.phoneHash 
+        })),
+        nonUserHashes,
+      };
+    } catch (error) {
+      console.error('Error checking contacts:', error);
       throw error;
     }
   }
