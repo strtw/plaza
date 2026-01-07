@@ -22,8 +22,13 @@ export class ContactsController {
   }
 
   @Post('hash-phones')
-  hashPhones(@Request() req, @Body() dto: HashPhonesDto) {
-    return this.contactsService.hashPhones(dto.phoneNumbers);
+  async hashPhones(@Request() req, @Body() dto: HashPhonesDto) {
+    try {
+      return await this.contactsService.hashPhones(dto.phoneNumbers);
+    } catch (error: any) {
+      console.error('Error in hashPhones endpoint:', error);
+      throw error;
+    }
   }
 
   @Post('check')
@@ -32,8 +37,13 @@ export class ContactsController {
   }
 
   @Post('match')
-  matchContacts(@Request() req, @Body() dto: MatchContactsDto) {
-    return this.contactsService.matchContacts(req.userId, dto.phoneHashes);
+  async matchContacts(@Request() req, @Body() dto: MatchContactsDto) {
+    try {
+      return await this.contactsService.matchContacts(req.userId, dto.phoneHashes);
+    } catch (error: any) {
+      console.error('Error in matchContacts endpoint:', error);
+      throw error;
+    }
   }
 
   @Post(':id/block')

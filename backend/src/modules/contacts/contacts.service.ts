@@ -98,20 +98,21 @@ export class ContactsService {
    */
   async matchContacts(userId: string, phoneHashes: string[]) {
     try {
+      if (!userId) {
+        throw new Error('userId is required');
+      }
+
+      if (!phoneHashes || phoneHashes.length === 0) {
+        return {
+          matched: 0,
+          users: [],
+        };
+      }
+
       const matchedUsers: any[] = [];
 
-      // Find all users matching these phone hashes
-      const existingUsers = await prisma.user.findMany({
-        where: {
-          phoneHash: { in: phoneHashes },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          // Note: phone number is not stored in DB (privacy-first design)
-        },
-      });
+      // Find all users matching these phone hashes (use service method for consistency)
+      const existingUsers = await this.usersService.findByPhoneHashes(phoneHashes);
 
       // Filter out self
       const otherUsers = existingUsers.filter(user => user.id !== userId);
@@ -182,12 +183,20 @@ export class ContactsService {
    */
   async hashPhones(phoneNumbers: string[]): Promise<string[]> {
     try {
+      if (!process.env.PHONE_HASH_SECRET) {
+        throw new Error('PHONE_HASH_SECRET environment variable is not set. Please configure it in Railway.');
+      }
+      
       return phoneNumbers.map(phone => {
         const normalized = normalizePhone(phone);
         return hashPhone(normalized);
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error hashing phone numbers:', error);
+      // Re-throw with a more user-friendly message
+      if (error.message?.includes('PHONE_HASH_SECRET')) {
+        throw new Error('Server configuration error: PHONE_HASH_SECRET is not set. Please contact support.');
+      }
       throw error;
     }
   }
