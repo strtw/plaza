@@ -1,7 +1,8 @@
 import React from 'react';
 import { Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
-import { useSignIn } from '@clerk/clerk-expo';
+import { useSignIn, useAuth } from '@clerk/clerk-expo';
 import { Link, useRouter } from 'expo-router';
+import { createApi } from '../../lib/api';
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
