@@ -48,9 +48,19 @@ export default function SignInScreen() {
         identifier: normalizedPhone,
       });
 
-      // Prepare phone code verification
+      // Find the phone_code factor and get the phone_number_id
+      const phoneCodeFactor = signInAttempt.supportedFirstFactors?.find(
+        (factor: any) => factor.strategy === 'phone_code'
+      ) as any;
+
+      if (!phoneCodeFactor || !phoneCodeFactor.phoneNumberId) {
+        throw new Error('Phone code verification not available for this account');
+      }
+
+      // Prepare phone code verification with phone_number_id
       await signIn.prepareFirstFactor({
         strategy: 'phone_code',
+        phoneNumberId: phoneCodeFactor.phoneNumberId,
       });
 
       setPendingVerification(true);
