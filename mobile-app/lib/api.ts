@@ -59,6 +59,7 @@ export const createApi = (getToken: () => Promise<string | null>) => {
   };
 
   return {
+    getOrCreateMe: () => fetchApi('/users/me'),
     getContacts: () => fetchApi('/contacts'),
     getContactsStatuses: () => fetchApi('/status/contacts'),
     getMyStatus: () => fetchApi('/status/me'),

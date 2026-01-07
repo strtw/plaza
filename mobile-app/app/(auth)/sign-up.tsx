@@ -1,10 +1,12 @@
 import React from 'react';
 import { Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
-import { useSignUp } from '@clerk/clerk-expo';
+import { useSignUp, useAuth } from '@clerk/clerk-expo';
 import { Link, useRouter } from 'expo-router';
+import { createApi } from '../../lib/api';
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
+  const { getToken } = useAuth();
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [pendingVerification, setPendingVerification] = React.useState(false);
@@ -89,15 +91,25 @@ export default function SignUpScreen() {
       console.log('Created session ID:', completeSignUp.createdSessionId);
       console.log('Missing fields:', completeSignUp.missingFields);
 
-      if (completeSignUp.status === 'complete') {
-        // Set the active session - this will trigger the auth layout to redirect
-        await setActive({ session: completeSignUp.createdSessionId });
-        
-        // The auth layout will automatically redirect when isSignedIn becomes true
-        // But we'll also manually navigate as a fallback
-        setTimeout(() => {
-          router.replace('/(tabs)');
-        }, 200);
+        if (completeSignUp.status === 'complete') {
+          // Set the active session - this will trigger the auth layout to redirect
+          await setActive({ session: completeSignUp.createdSessionId });
+
+          // Create user in Plaza database if they don't exist
+          try {
+            const api = createApi(getToken);
+            await api.getOrCreateMe();
+            console.log('User created/updated in Plaza database');
+          } catch (error: any) {
+            console.error('Error creating user in Plaza database:', error);
+            // Don't block sign-up if this fails - user can still use the app
+          }
+
+          // The auth layout will automatically redirect when isSignedIn becomes true
+          // But we'll also manually navigate as a fallback
+          setTimeout(() => {
+            router.replace('/(tabs)');
+          }, 200);
       } else if (completeSignUp.status === 'missing_requirements') {
         // Check what's missing and handle it
         const missingFields = completeSignUp.missingFields || [];

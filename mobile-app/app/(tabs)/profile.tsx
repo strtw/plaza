@@ -17,42 +17,44 @@ const ProfileScreenContent = lazy(() => Promise.resolve({
     const queryClient = useQueryClient();
     const router = useRouter();
 
-  if (!isLoaded) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Loading...</Text>
-      </View>
+    // All hooks must be called before any conditional returns
+    const [status, setStatus] = useState<AvailabilityStatus>(
+      AvailabilityStatus.AVAILABLE
     );
-  }
+    const [message, setMessage] = useState('');
+    const [startTime, setStartTime] = useState(new Date());
+    const [endTime, setEndTime] = useState(() => {
+      const end = new Date();
+      end.setHours(end.getHours() + 2);
+      return end;
+    });
 
-  if (!isSignedIn) {
-    return <Redirect href="/(auth)/sign-in" />;
-  }
+    const { data: currentStatus } = useQuery({
+      queryKey: ['my-status'],
+      queryFn: api.getMyStatus,
+      enabled: isLoaded && isSignedIn,
+    });
 
-  const [status, setStatus] = useState<AvailabilityStatus>(
-    AvailabilityStatus.AVAILABLE
-  );
-  const [message, setMessage] = useState('');
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(() => {
-    const end = new Date();
-    end.setHours(end.getHours() + 2);
-    return end;
-  });
+    const createStatusMutation = useMutation({
+      mutationFn: api.createStatus,
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['my-status'] });
+        queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      },
+    });
 
-  const { data: currentStatus } = useQuery({
-    queryKey: ['my-status'],
-    queryFn: api.getMyStatus,
-    enabled: isLoaded && isSignedIn,
-  });
+    // Now we can do conditional returns after all hooks
+    if (!isLoaded) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text>Loading...</Text>
+        </View>
+      );
+    }
 
-  const createStatusMutation = useMutation({
-    mutationFn: api.createStatus,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-status'] });
-      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
-    },
-  });
+    if (!isSignedIn) {
+      return <Redirect href="/(auth)/sign-in" />;
+    }
 
   // Generate a dummy invite code for now (32 character hex string)
   const generateDummyInviteCode = () => {

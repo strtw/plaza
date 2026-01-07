@@ -5,6 +5,7 @@ import { Link, useRouter } from 'expo-router';
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
+  const { getToken } = useAuth();
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [pendingVerification, setPendingVerification] = React.useState(false);
@@ -87,7 +88,17 @@ export default function SignInScreen() {
       if (completeSignIn.status === 'complete') {
         // Set the active session - this will trigger the auth layout to redirect
         await setActive({ session: completeSignIn.createdSessionId });
-        
+
+        // Create user in Plaza database if they don't exist
+        try {
+          const api = createApi(getToken);
+          await api.getOrCreateMe();
+          console.log('User created/updated in Plaza database');
+        } catch (error: any) {
+          console.error('Error creating user in Plaza database:', error);
+          // Don't block sign-in if this fails - user can still use the app
+        }
+
         // The auth layout will automatically redirect when isSignedIn becomes true
         // But we'll also manually navigate as a fallback
         setTimeout(() => {
