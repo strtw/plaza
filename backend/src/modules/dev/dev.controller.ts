@@ -18,23 +18,23 @@ export class DevController {
   constructor(private readonly devService: DevService) {}
 
   /**
-   * Create mock users from phone numbers
+   * Create mock users from phone numbers and names
    * POST /dev/mock-users
-   * Body: { phoneNumbers: string[] }
+   * Body: { contacts: Array<{ phone: string, name: string }> }
    */
   @Post('mock-users')
   @UseGuards(AuthGuard)
-  async createMockUsers(@Request() req, @Body() body: { phoneNumbers: string[] }) {
+  async createMockUsers(@Request() req, @Body() body: { contacts: Array<{ phone: string; name: string }> }) {
     // Environment check - only allow in development
     if (process.env.NODE_ENV === 'production') {
       throw new ForbiddenException('Dev endpoints are not available in production');
     }
 
-    if (!body.phoneNumbers || !Array.isArray(body.phoneNumbers) || body.phoneNumbers.length === 0) {
-      throw new ForbiddenException('phoneNumbers array is required');
+    if (!body.contacts || !Array.isArray(body.contacts) || body.contacts.length === 0) {
+      throw new ForbiddenException('contacts array is required');
     }
 
-    return this.devService.createMockUsers(body.phoneNumbers);
+    return this.devService.createMockUsers(body.contacts);
   }
 }
 

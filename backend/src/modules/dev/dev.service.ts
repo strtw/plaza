@@ -14,14 +14,16 @@ const prisma = new PrismaClient();
 @Injectable()
 export class DevService {
   /**
-   * Create mock users for the given phone numbers
-   * All users will have [TEST] prefix in their name
+   * Create mock users for the given contacts (phone + name)
+   * Uses the actual contact name from the phone
    * Phone numbers are hashed before storing (privacy-first design)
    */
-  async createMockUsers(phoneNumbers: string[]): Promise<{ created: number; users: any[] }> {
+  async createMockUsers(contacts: Array<{ phone: string; name: string }>): Promise<{ created: number; users: any[] }> {
     const createdUsers: Array<{ id: string; name: string }> = [];
 
-    for (const phone of phoneNumbers) {
+    for (const contact of contacts) {
+      const { phone, name } = contact;
+      
       // Hash the phone number (privacy-first design)
       const phoneHash = hashPhone(phone);
 
@@ -29,7 +31,10 @@ export class DevService {
       const normalizedPhone = phone.replace(/\D/g, '');
       const testClerkId = `test_${normalizedPhone}`;
 
-      // Create or update user with [TEST] prefix
+      // Use the actual contact name (or fallback if missing)
+      const userName = name || `User ${normalizedPhone.slice(-4)}`;
+
+      // Create or update user with actual contact name
       const existingUser = await prisma.user.findFirst({
         where: { phoneHash },
       });
@@ -38,7 +43,7 @@ export class DevService {
         ? await prisma.user.update({
             where: { id: existingUser.id },
             data: {
-              name: `[TEST] User ${normalizedPhone.slice(-4)}`, // Last 4 digits as identifier
+              name: userName,
               clerkId: testClerkId,
             },
           })
@@ -46,15 +51,14 @@ export class DevService {
             data: {
               clerkId: testClerkId,
               phoneHash,
-              name: `[TEST] User ${normalizedPhone.slice(-4)}`,
+              name: userName,
               email: `test.${normalizedPhone}@example.com`,
             },
           });
 
-      const userName: string = user.name || `[TEST] User ${normalizedPhone.slice(-4)}`;
       createdUsers.push({
         id: user.id,
-        name: userName,
+        name: user.name || userName,
         // Note: phone number not returned (privacy-first design)
       });
     }

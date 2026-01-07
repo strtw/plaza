@@ -90,10 +90,10 @@ export const createApi = (getToken: () => Promise<string | null>) => {
         body: JSON.stringify({ phoneHashes }),
       }),
     // Dev endpoint - only works when NODE_ENV !== 'production'
-    createMockUsers: (phoneNumbers: string[]) =>
+    createMockUsers: (contacts: Array<{ phone: string; name: string }>) =>
       fetchApi('/dev/mock-users', {
         method: 'POST',
-        body: JSON.stringify({ phoneNumbers }),
+        body: JSON.stringify({ contacts }),
       }),
   };
 };

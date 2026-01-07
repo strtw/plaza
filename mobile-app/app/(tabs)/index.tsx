@@ -19,6 +19,7 @@ function HomeScreenContent() {
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [savedContacts, setSavedContacts] = useState<Array<{ name: string; phone: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [contactsInPlaza, setContactsInPlaza] = useState<Set<string>>(new Set()); // Track which phone numbers are Plaza users
   const appState = useRef(AppState.currentState);
 
   // Function to load contacts
@@ -79,11 +80,53 @@ function HomeScreenContent() {
       
       // Set fresh contacts (no caching)
       setDeviceContacts(contacts);
+      
+      // Check which contacts are Plaza users
+      if (contacts.length > 0) {
+        checkContactsInPlaza(contacts);
+      }
     } catch (error) {
       console.error('Error loading contacts:', error);
       setDeviceContacts([]);
     } finally {
       setIsLoadingContacts(false);
+    }
+  };
+
+  // Function to check which device contacts are Plaza users
+  const checkContactsInPlaza = async (contacts: Array<{ name: string; phone: string }>) => {
+    try {
+      if (contacts.length === 0) return;
+      
+      // Hash all phone numbers
+      const phoneNumbers = contacts.map(c => c.phone);
+      const phoneHashes = await hashPhones(phoneNumbers, api.hashPhones);
+      
+      // Check which are Plaza users
+      const checkResult = await api.checkContacts(phoneHashes);
+      
+      // Create a Set of phone numbers that are Plaza users
+      // We need to map back from hashes to phone numbers
+      const plazaUserPhones = new Set<string>();
+      const hashToPhone = new Map<string, string>();
+      
+      // Create mapping of hash to phone
+      for (let i = 0; i < phoneNumbers.length; i++) {
+        hashToPhone.set(phoneHashes[i], phoneNumbers[i]);
+      }
+      
+      // Mark phone numbers that are Plaza users
+      checkResult.existingUsers.forEach(user => {
+        const phone = hashToPhone.get(user.phoneHash);
+        if (phone) {
+          plazaUserPhones.add(phone);
+        }
+      });
+      
+      setContactsInPlaza(plazaUserPhones);
+    } catch (error) {
+      console.error('Error checking contacts in Plaza:', error);
+      // Don't block UI if this fails
     }
   };
 
@@ -242,8 +285,9 @@ function HomeScreenContent() {
                     }
 
                     try {
-                      const phoneNumbers = selected.map(c => c.phone);
-                      const result = await api.createMockUsers(phoneNumbers);
+                      // Send contacts with phone and name
+                      const contacts = selected.map(c => ({ phone: c.phone, name: c.name }));
+                      const result = await api.createMockUsers(contacts);
                       Alert.alert(
                         'Mock Users Created',
                         `Created ${result.created} test user${result.created !== 1 ? 's' : ''}.\n\nThey will appear as existing Plaza users.`,
@@ -395,6 +439,7 @@ function HomeScreenContent() {
                 keyExtractor={(item, index) => `${item.phone}-${index}`}
                 renderItem={({ item }) => {
                   const isSelected = selectedContacts.has(item.phone);
+                  const isInPlaza = contactsInPlaza.has(item.phone);
                   return (
                     <Pressable
                       style={styles.contactItem}
@@ -412,7 +457,14 @@ function HomeScreenContent() {
                         {isSelected && <View style={styles.checkboxInner} />}
                       </View>
                       <View style={styles.contactInfo}>
-                        <Text style={styles.contactName}>{item.name}</Text>
+                        <View style={styles.contactNameRow}>
+                          <Text style={styles.contactName}>{item.name}</Text>
+                          {isInPlaza && (
+                            <View style={styles.plazaBadge}>
+                              <Text style={styles.plazaBadgeText}>On Plaza</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={styles.contactPhone}>{item.phone}</Text>
                       </View>
                     </Pressable>
@@ -614,10 +666,27 @@ const styles = StyleSheet.create({
   contactInfo: {
     flex: 1,
   },
+  contactNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    gap: 8,
+  },
   contactName: {
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: 4,
+  },
+  plazaBadge: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  plazaBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+    textTransform: 'uppercase',
   },
   contactPhone: {
     fontSize: 14,
