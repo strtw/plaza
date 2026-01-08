@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, SelectedContact } from '@prisma/client';
 import { hashPhone } from '../../common/utils/phone-hash.util';
 
 const prisma = new PrismaClient();
@@ -17,7 +17,7 @@ export class SelectedContactsService {
     try {
       console.log('[SelectedContactsService] Saving', contacts.length, 'selected contacts for user:', userId);
 
-      const savedContacts = [];
+      const savedContacts: SelectedContact[] = [];
 
       for (const contact of contacts) {
         // Hash the phone number
@@ -100,5 +100,6 @@ export class SelectedContactsService {
     }
   }
 }
+
 
 

@@ -99,9 +99,7 @@ model SelectedContact {
   updatedAt DateTime @updatedAt
 
   user      User  @relation("UserSelectedContacts", fields: [userId], references: [id], onDelete: Cascade)
-  plazaUser User? @relation("SelectedContactPlazaUser", fields: [plazaUserId], references: [id], onDelete: SetNull)
-
-  @@unique([userId, phoneHash])
+  plazaUser User? @relation("SelectedContactPlazaUser", fields: [plazaUserId], references: [id], onDelete: SetNull)  @@unique([userId, phoneHash])
   @@index([userId])
   @@index([phoneHash])
   @@index([plazaUserId])
