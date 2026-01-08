@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
 import { ContactsService } from './contacts.service';
 import { AddContactDto } from './dto/add-contact.dto';
 import { MatchContactsDto } from './dto/match-contacts.dto';
 import { CheckContactsDto } from './dto/check-contacts.dto';
 import { HashPhonesDto } from './dto/hash-phones.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 @Controller('contacts')
 @UseGuards(AuthGuard)
@@ -12,13 +15,33 @@ export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}
 
   @Get()
-  getContacts(@Request() req) {
-    return this.contactsService.getContacts(req.userId);
+  async getContacts(@Request() req) {
+    // Look up Plaza user by Clerk ID
+    const user = await prisma.user.findUnique({
+      where: { clerkId: req.userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new HttpException('User not found. Please ensure the user exists in the database.', HttpStatus.NOT_FOUND);
+    }
+
+    return this.contactsService.getContacts(user.id);
   }
 
   @Post()
-  addContact(@Request() req, @Body() dto: AddContactDto) {
-    return this.contactsService.addContact(req.userId, dto.contactUserId);
+  async addContact(@Request() req, @Body() dto: AddContactDto) {
+    // Look up Plaza user by Clerk ID
+    const user = await prisma.user.findUnique({
+      where: { clerkId: req.userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new HttpException('User not found. Please ensure the user exists in the database.', HttpStatus.NOT_FOUND);
+    }
+
+    return this.contactsService.addContact(user.id, dto.contactUserId);
   }
 
   @Post('hash-phones')
@@ -40,7 +63,7 @@ export class ContactsController {
   async matchContacts(@Request() req, @Body() dto: MatchContactsDto) {
     try {
       console.log('[ContactsController] matchContacts endpoint called');
-      console.log('[ContactsController] userId:', req.userId);
+      console.log('[ContactsController] clerkId:', req.userId);
       console.log('[ContactsController] phoneHashes count:', dto.phoneHashes?.length);
       
       if (!req.userId) {
@@ -48,7 +71,18 @@ export class ContactsController {
         throw new Error('User not authenticated');
       }
       
-      const result = await this.contactsService.matchContacts(req.userId, dto.phoneHashes);
+      // Look up Plaza user by Clerk ID
+      const user = await prisma.user.findUnique({
+        where: { clerkId: req.userId },
+        select: { id: true },
+      });
+
+      if (!user) {
+        throw new HttpException('User not found. Please ensure the user exists in the database.', HttpStatus.NOT_FOUND);
+      }
+      
+      console.log('[ContactsController] Found Plaza user:', user.id);
+      const result = await this.contactsService.matchContacts(user.id, dto.phoneHashes);
       console.log('[ContactsController] matchContacts completed successfully:', result);
       return result;
     } catch (error: any) {
@@ -66,8 +100,18 @@ export class ContactsController {
   }
 
   @Post(':id/block')
-  blockContact(@Request() req, @Param('id') contactId: string) {
-    return this.contactsService.blockContact(req.userId, contactId);
+  async blockContact(@Request() req, @Param('id') contactId: string) {
+    // Look up Plaza user by Clerk ID
+    const user = await prisma.user.findUnique({
+      where: { clerkId: req.userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new HttpException('User not found. Please ensure the user exists in the database.', HttpStatus.NOT_FOUND);
+    }
+
+    return this.contactsService.blockContact(user.id, contactId);
   }
 }
 
