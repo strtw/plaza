@@ -310,7 +310,7 @@ function HomeScreenContent() {
             refreshing={isLoading} 
             onRefresh={() => {
               refetch();
-              queryClient.invalidateQueries({ queryKey: ['selected-contacts'] });
+              queryClient.invalidateQueries({ queryKey: ['app-contacts'] });
             }} 
           />
         }
@@ -398,7 +398,7 @@ function HomeScreenContent() {
                   try {
                     // Step 1: Save selected contacts (only Plaza users can be selected)
                     console.log('[Contact Sync] Step 1: Saving selected contacts...');
-                    await api.saveSelectedContacts(selected);
+                    await api.saveAppContacts(selected);
                     console.log('[Contact Sync] Step 1: Saved', selected.length, 'selected contacts');
                     
                     // Step 2: Hash the phone numbers
@@ -424,7 +424,7 @@ function HomeScreenContent() {
                     
                     // Refresh contacts list
                     queryClient.invalidateQueries({ queryKey: ['contacts'] });
-                    queryClient.invalidateQueries({ queryKey: ['selected-contacts'] });
+                    queryClient.invalidateQueries({ queryKey: ['app-contacts'] });
                     queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
                   } catch (error: any) {
                     console.error('Error syncing contacts:', error);

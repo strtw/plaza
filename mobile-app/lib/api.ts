@@ -95,13 +95,13 @@ export const createApi = (getToken: () => Promise<string | null>) => {
         method: 'POST',
         body: JSON.stringify({ contacts }),
       }),
-    // Selected contacts endpoints
-    saveSelectedContacts: (contacts: Array<{ phone: string; name: string }>) =>
-      fetchApi('/selected-contacts', {
+    // App contacts endpoints
+    saveAppContacts: (contacts: Array<{ phone: string; name: string }>) =>
+      fetchApi('/app-contacts', {
         method: 'POST',
         body: JSON.stringify({ contacts }),
       }),
-    getSelectedContacts: () => fetchApi('/selected-contacts'),
+    getAppContacts: () => fetchApi('/app-contacts'),
   };
 };
 

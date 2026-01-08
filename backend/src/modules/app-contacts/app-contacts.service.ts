@@ -1,23 +1,23 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, SelectedContact } from '@prisma/client';
+import { PrismaClient, AppContact } from '@prisma/client';
 import { hashPhone } from '../../common/utils/phone-hash.util';
 
 const prisma = new PrismaClient();
 
 @Injectable()
-export class SelectedContactsService {
+export class AppContactsService {
   /**
-   * Save selected contacts for a user
-   * Contacts are stored even if they're not Plaza users yet
+   * Save app contacts for a user
+   * Only Plaza users can be saved as app contacts
    */
-  async saveSelectedContacts(
+  async saveAppContacts(
     userId: string,
     contacts: Array<{ phone: string; name: string }>
   ) {
     try {
-      console.log('[SelectedContactsService] Saving', contacts.length, 'selected contacts for user:', userId);
+      console.log('[AppContactsService] Saving', contacts.length, 'app contacts for user:', userId);
 
-      const savedContacts: SelectedContact[] = [];
+      const savedContacts: AppContact[] = [];
 
       for (const contact of contacts) {
         // Hash the phone number
@@ -29,8 +29,8 @@ export class SelectedContactsService {
           select: { id: true },
         });
 
-        // Upsert the selected contact
-        const selectedContact = await prisma.selectedContact.upsert({
+        // Upsert the app contact
+        const appContact = await prisma.appContact.upsert({
           where: {
             userId_phoneHash: {
               userId,
@@ -49,28 +49,28 @@ export class SelectedContactsService {
           },
         });
 
-        savedContacts.push(selectedContact);
+        savedContacts.push(appContact);
       }
 
-      console.log('[SelectedContactsService] Saved', savedContacts.length, 'selected contacts');
+      console.log('[AppContactsService] Saved', savedContacts.length, 'app contacts');
 
       return {
         saved: savedContacts.length,
         contacts: savedContacts,
       };
     } catch (error: any) {
-      console.error('[SelectedContactsService] Error saving selected contacts:', error);
+      console.error('[AppContactsService] Error saving app contacts:', error);
       throw error;
     }
   }
 
   /**
-   * Get all selected contacts for a user
-   * Returns both Plaza users and non-Plaza users
+   * Get all app contacts for a user
+   * Returns Plaza users that have been saved as app contacts
    */
-  async getSelectedContacts(userId: string) {
+  async getAppContacts(userId: string) {
     try {
-      const selectedContacts = await prisma.selectedContact.findMany({
+      const appContacts = await prisma.appContact.findMany({
         where: { userId },
         include: {
           plazaUser: {
@@ -86,20 +86,17 @@ export class SelectedContactsService {
       });
 
       // Transform to a unified format
-      return selectedContacts.map((sc) => ({
-        id: sc.id,
-        name: sc.name,
-        phoneHash: sc.phoneHash,
-        isOnPlaza: !!sc.plazaUserId,
-        plazaUser: sc.plazaUser,
-        createdAt: sc.createdAt,
+      return appContacts.map((ac) => ({
+        id: ac.id,
+        name: ac.name,
+        phoneHash: ac.phoneHash,
+        isOnPlaza: !!ac.plazaUserId,
+        plazaUser: ac.plazaUser,
+        createdAt: ac.createdAt,
       }));
     } catch (error: any) {
-      console.error('[SelectedContactsService] Error fetching selected contacts:', error);
+      console.error('[AppContactsService] Error fetching app contacts:', error);
       return [];
     }
   }
 }
-
-
-

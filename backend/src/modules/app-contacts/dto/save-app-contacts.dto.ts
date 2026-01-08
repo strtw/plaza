@@ -9,7 +9,7 @@ class ContactDto {
   name: string;
 }
 
-export class SaveSelectedContactsDto {
+export class SaveAppContactsDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ContactDto)

@@ -6,7 +6,7 @@ import { ContactsModule } from './modules/contacts/contacts.module';
 import { InvitesModule } from './modules/invites/invites.module';
 import { UsersModule } from './modules/users/users.module';
 import { DevModule } from './modules/dev/dev.module';
-import { SelectedContactsModule } from './modules/selected-contacts/selected-contacts.module';
+import { AppContactsModule } from './modules/app-contacts/app-contacts.module';
 
 @Module({
   imports: [
@@ -14,7 +14,7 @@ import { SelectedContactsModule } from './modules/selected-contacts/selected-con
     ContactsModule,
     InvitesModule,
     UsersModule,
-    SelectedContactsModule,
+    AppContactsModule,
     // DevModule - Only active in development, endpoints check NODE_ENV
     DevModule,
   ],
