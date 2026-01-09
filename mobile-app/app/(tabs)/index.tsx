@@ -265,14 +265,7 @@ function HomeScreenContent() {
       // Refresh contacts list
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
-      
-      if (data.matched > 0) {
-        Alert.alert(
-          'Contacts Matched!',
-          `Found ${data.matched} friend${data.matched !== 1 ? 's' : ''} on Plaza. They've been added to your contacts.`,
-          [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
-        );
-      }
+      // Note: Alert is handled in the done button handler to avoid duplicate alerts
     },
     onError: (error: any) => {
       console.error('Error matching contacts:', error);
@@ -284,12 +277,13 @@ function HomeScreenContent() {
     },
   });
 
-  // Only show Plaza users in the contacts list (people you can actually interact with)
-  // Selected contacts are saved but only appear once they join Plaza
+  // Show Plaza users in the contacts list (people you can actually interact with)
+  // These are contacts that have been matched and added via the Contact table
   const contactsWithStatus = contacts?.map((contact: any) => ({
     ...contact,
     status: statuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
   })) || [];
+  
 
   if (isLoading) {
     return (
@@ -409,23 +403,35 @@ function HomeScreenContent() {
                     
                     // Step 3: Match contacts (all selected contacts are Plaza users)
                     console.log('[Contact Sync] Step 3: Matching contacts...');
-                    await matchContactsMutation.mutateAsync(phoneHashes);
-                    console.log('[Contact Sync] Step 3: Contacts matched successfully');
+                    const matchResult = await matchContactsMutation.mutateAsync(phoneHashes);
+                    console.log('[Contact Sync] Step 3: Contacts matched successfully', matchResult);
                     
-                    // Step 4: Show results
-                    const count = selected.length;
+                    // Step 4: Refresh contacts list immediately
+                    await Promise.all([
+                      queryClient.invalidateQueries({ queryKey: ['contacts'] }),
+                      queryClient.invalidateQueries({ queryKey: ['app-contacts'] }),
+                      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] }),
+                    ]);
+                    
+                    // Refetch contacts to ensure the list is updated
+                    await refetch();
+                    
+                    // Step 5: Show results and close modal
+                    const count = matchResult?.matched || selected.length;
                     const message = `Added ${count} friend${count !== 1 ? 's' : ''} on Plaza!`;
                     
                     Alert.alert(
                       'Contacts Saved',
                       message,
-                      [{ text: 'OK', onPress: () => setShowSyncModal(false) }]
+                      [{ 
+                        text: 'OK', 
+                        onPress: () => {
+                          setShowSyncModal(false);
+                          // Clear selected contacts
+                          setSelectedContacts(new Set());
+                        }
+                      }]
                     );
-                    
-                    // Refresh contacts list
-                    queryClient.invalidateQueries({ queryKey: ['contacts'] });
-                    queryClient.invalidateQueries({ queryKey: ['app-contacts'] });
-                    queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
                   } catch (error: any) {
                     console.error('Error syncing contacts:', error);
                     Alert.alert(
