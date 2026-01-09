@@ -159,14 +159,17 @@ function ActivityScreenContent() {
           setShowStatusModal(true);
         }}
       >
-        <TextInput
-          style={styles.statusInput}
-          placeholder="What's your status?"
-          placeholderTextColor="#999"
-          editable={false}
-          pointerEvents="none"
-          value={currentStatus ? `${currentStatus.status}${currentStatus.message ? `: ${currentStatus.message}` : ''}` : ''}
-        />
+        <View style={styles.statusInputWrapper}>
+          <Ionicons name="create-outline" size={20} color="#666" style={styles.composeIcon} />
+          <TextInput
+            style={styles.statusInput}
+            placeholder="What's your status?"
+            placeholderTextColor="#333"
+            editable={false}
+            pointerEvents="none"
+            value={currentStatus ? `${currentStatus.status}${currentStatus.message ? `: ${currentStatus.message}` : ''}` : ''}
+          />
+        </View>
       </Pressable>
       <FlatList
         data={activeContacts}
@@ -223,6 +226,7 @@ function ActivityScreenContent() {
                 value={message}
                 onChangeText={setMessage}
                 placeholder="What's your status?"
+                placeholderTextColor="#333"
                 style={styles.messageInput}
                 multiline
                 maxLength={140}
@@ -311,7 +315,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
+  statusInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  composeIcon: {
+    marginRight: 12,
+  },
   statusInput: {
+    flex: 1,
     backgroundColor: '#f5f5f5',
     borderRadius: 12,
     padding: 14,
