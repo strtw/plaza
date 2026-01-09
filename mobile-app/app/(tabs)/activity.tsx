@@ -98,7 +98,7 @@ function ActivityScreenContent() {
   const activeContacts = contactsWithStatus.filter((contact: any) => contact.status !== undefined);
 
   const handleSaveStatus = () => {
-    if (!message.trim() || !endTime) {
+    if (!message.trim() || !location || !endTime) {
       return;
     }
     
@@ -124,8 +124,8 @@ function ActivityScreenContent() {
     }
   };
 
-  // Check if form is ready to save (message and endTime are set)
-  const isFormReady = message.trim().length > 0 && endTime !== null;
+  // Check if form is ready to save (message, location, and endTime are set)
+  const isFormReady = message.trim().length > 0 && location !== null && endTime !== null;
 
   if (!isLoaded) {
     return (
@@ -225,83 +225,123 @@ function ActivityScreenContent() {
           </View>
           <ScrollView style={styles.modalContent}>
             <View style={styles.messageContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>Status Message</Text>
+                <Text style={styles.requiredIndicator}>Required</Text>
+              </View>
               <TextInput
                 value={message}
                 onChangeText={setMessage}
                 placeholder="What's your status?"
                 placeholderTextColor="#333"
-                style={styles.messageInput}
+                style={[
+                  styles.messageInput,
+                  !message.trim() && styles.inputIncomplete
+                ]}
                 multiline
                 maxLength={140}
                 autoFocus
               />
-              <Text style={styles.characterCount}>
-                {message.length}/140
-              </Text>
+              <View style={styles.inputFooter}>
+                <Text style={styles.helperText}>
+                  {!message.trim() ? 'Enter a message to share your status' : ''}
+                </Text>
+                <Text style={styles.characterCount}>
+                  {message.length}/140
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.locationSelectorContainer}>
-              <Pressable
-                style={[styles.locationOption, location === 'home' && styles.locationOptionSelected]}
-                onPress={() => setLocation('home')}
-              >
-                <Ionicons 
-                  name="home-outline" 
-                  size={24} 
-                  color={location === 'home' ? '#007AFF' : '#666'} 
-                />
-                <Text style={[styles.locationOptionText, location === 'home' && styles.locationOptionTextSelected]}>
-                  Home
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.locationOption, location === 'greenspace' && styles.locationOptionSelected]}
-                onPress={() => setLocation('greenspace')}
-              >
-                <Ionicons 
-                  name="leaf" 
-                  size={24} 
-                  color={location === 'greenspace' ? '#007AFF' : '#666'} 
-                />
-                <Text style={[styles.locationOptionText, location === 'greenspace' && styles.locationOptionTextSelected]}>
-                  Greenspace
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.locationOption, location === 'third-place' && styles.locationOptionSelected]}
-                onPress={() => setLocation('third-place')}
-              >
-                <Ionicons 
-                  name="business" 
-                  size={24} 
-                  color={location === 'third-place' ? '#007AFF' : '#666'} 
-                />
-                <Text style={[styles.locationOptionText, location === 'third-place' && styles.locationOptionTextSelected]}>
-                  Third Place
-                </Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.timePickerContainer}>
-              <Text style={styles.clearAfterButtonText}>
-                Clear after...
-              </Text>
-              {Platform.OS === 'ios' ? (
-                <DateTimePicker
-                  value={endTime || new Date()}
-                  mode="time"
-                  display="default"
-                  minuteInterval={15}
-                  onChange={handleTimeChange}
-                />
-              ) : (
-                <DateTimePicker
-                  value={endTime || new Date()}
-                  mode="time"
-                  minuteInterval={15}
-                  onChange={handleTimeChange}
-                />
+            <View style={styles.locationContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>Location</Text>
+                <Text style={styles.requiredIndicator}>Required</Text>
+              </View>
+              <View style={styles.locationSelectorContainer}>
+                <Pressable
+                  style={[
+                    styles.locationOption, 
+                    location === 'home' && styles.locationOptionSelected,
+                    !location && styles.locationOptionIncomplete
+                  ]}
+                  onPress={() => setLocation('home')}
+                >
+                  <Ionicons 
+                    name="home-outline" 
+                    size={24} 
+                    color={location === 'home' ? '#007AFF' : '#666'} 
+                  />
+                  <Text style={[styles.locationOptionText, location === 'home' && styles.locationOptionTextSelected]}>
+                    Home
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.locationOption, 
+                    location === 'greenspace' && styles.locationOptionSelected,
+                    !location && styles.locationOptionIncomplete
+                  ]}
+                  onPress={() => setLocation('greenspace')}
+                >
+                  <Ionicons 
+                    name="leaf" 
+                    size={24} 
+                    color={location === 'greenspace' ? '#007AFF' : '#666'} 
+                  />
+                  <Text style={[styles.locationOptionText, location === 'greenspace' && styles.locationOptionTextSelected]}>
+                    Greenspace
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.locationOption, 
+                    location === 'third-place' && styles.locationOptionSelected,
+                    !location && styles.locationOptionIncomplete
+                  ]}
+                  onPress={() => setLocation('third-place')}
+                >
+                  <Ionicons 
+                    name="business" 
+                    size={24} 
+                    color={location === 'third-place' ? '#007AFF' : '#666'} 
+                  />
+                  <Text style={[styles.locationOptionText, location === 'third-place' && styles.locationOptionTextSelected]}>
+                    Third Place
+                  </Text>
+                </Pressable>
+              </View>
+              {!location && (
+                <Text style={styles.helperText}>Select where you'll be</Text>
               )}
+            </View>
+
+            <View style={styles.timeContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>Clear After</Text>
+                <Text style={styles.requiredIndicator}>Required</Text>
+              </View>
+              <View style={styles.timePickerContainer}>
+                <Text style={styles.clearAfterButtonText}>
+                  Time
+                </Text>
+                {Platform.OS === 'ios' ? (
+                  <DateTimePicker
+                    value={endTime || new Date()}
+                    mode="time"
+                    display="default"
+                    minuteInterval={15}
+                    onChange={handleTimeChange}
+                  />
+                ) : (
+                  <DateTimePicker
+                    value={endTime || new Date()}
+                    mode="time"
+                    minuteInterval={15}
+                    onChange={handleTimeChange}
+                  />
+                )}
+              </View>
+              <Text style={styles.helperText}>When should your status automatically clear?</Text>
             </View>
           </ScrollView>
         </View>
@@ -417,10 +457,26 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   messageContainer: {
-    marginBottom: 24,
+    marginBottom: 28,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+  },
+  requiredIndicator: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '400',
   },
   messageInput: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#e0e0e0',
     borderRadius: 12,
     padding: 16,
@@ -430,36 +486,56 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
   },
+  inputIncomplete: {
+    borderColor: '#ff9500',
+    backgroundColor: '#fffbf5',
+  },
+  inputFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
+  },
   characterCount: {
     fontSize: 12,
     color: '#999',
-    textAlign: 'right',
-    marginTop: 4,
+  },
+  locationContainer: {
+    marginBottom: 28,
   },
   locationSelectorContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 24,
+    marginBottom: 6,
   },
   locationOption: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: '#e0e0e0',
     backgroundColor: '#fff',
     gap: 8,
   },
+  locationOptionIncomplete: {
+    borderColor: '#ff9500',
+    backgroundColor: '#fffbf5',
+  },
   locationOptionSelected: {
     borderColor: '#007AFF',
     backgroundColor: '#f0f8ff',
   },
   locationOptionText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
     fontWeight: '500',
   },
@@ -467,10 +543,13 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '600',
   },
+  timeContainer: {
+    marginBottom: 20,
+  },
   timePickerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 6,
     gap: 16,
   },
   clearAfterButtonText: {
