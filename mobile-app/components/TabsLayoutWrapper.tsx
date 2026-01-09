@@ -12,6 +12,14 @@ export function TabsLayoutWrapper() {
       {/* Custom Tab Bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity
+          style={[styles.tab, pathname === '/(tabs)/activity' ? styles.activeTab : null]}
+          onPress={() => router.push('/(tabs)/activity')}
+        >
+          <Text style={[styles.tabText, pathname === '/(tabs)/activity' ? styles.activeTabText : null]}>
+            Activity
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.tab, pathname === '/(tabs)' || pathname === '/(tabs)/' ? styles.activeTab : null]}
           onPress={() => router.push('/(tabs)')}
         >
