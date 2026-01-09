@@ -1,14 +1,23 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
-import { StatusPicker } from '../../components/StatusPicker';
-import { TimeWindowPicker } from '../../components/TimeWindowPicker';
 import { AvailabilityStatus } from '../../lib/types';
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+
+// Helper function to round time to nearest 15 minutes
+const roundToNearest15Minutes = (date: Date): Date => {
+  const rounded = new Date(date);
+  const minutes = rounded.getMinutes();
+  const roundedMinutes = Math.round(minutes / 15) * 15;
+  rounded.setMinutes(roundedMinutes, 0, 0);
+  return rounded;
+};
 
 function ActivityScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
@@ -18,13 +27,13 @@ function ActivityScreenContent() {
 
   // Modal state
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const [status, setStatus] = useState<AvailabilityStatus>(AvailabilityStatus.AVAILABLE);
   const [message, setMessage] = useState('');
-  const [startTime, setStartTime] = useState(new Date());
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  
   const [endTime, setEndTime] = useState(() => {
     const end = new Date();
     end.setHours(end.getHours() + 2);
-    return end;
+    return roundToNearest15Minutes(end);
   });
 
   // All hooks must be called before any conditional returns
@@ -52,6 +61,12 @@ function ActivityScreenContent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-status'] });
       queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      // Reset form state
+      setMessage('');
+      setShowTimePicker(false);
+      const defaultEndTime = new Date();
+      defaultEndTime.setHours(defaultEndTime.getHours() + 2);
+      setEndTime(roundToNearest15Minutes(defaultEndTime));
       setShowStatusModal(false);
       Alert.alert('Success', 'Your status has been set!');
     },
@@ -74,13 +89,29 @@ function ActivityScreenContent() {
   const activeContacts = contactsWithStatus.filter((contact: any) => contact.status !== undefined);
 
   const handleSaveStatus = () => {
+    if (!message.trim() || !endTime) {
+      return;
+    }
+    
     createStatusMutation.mutate({
-      status,
-      message,
-      startTime: startTime.toISOString(),
+      status: AvailabilityStatus.AVAILABLE,
+      message: message.trim(),
+      startTime: new Date().toISOString(), // Current time
       endTime: endTime.toISOString(),
     });
   };
+
+  const handleTimeChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
+    if (selectedDate) {
+      setEndTime(roundToNearest15Minutes(selectedDate));
+    }
+  };
+
+  // Check if form is ready to save (message and endTime are set)
+  const isFormReady = message.trim().length > 0 && endTime !== null;
 
   if (!isLoaded) {
     return (
@@ -109,13 +140,22 @@ function ActivityScreenContent() {
       </View>
       <Pressable 
         style={styles.statusInputContainer}
-        onPress={() => setShowStatusModal(true)}
+        onPress={() => {
+          // Reset form state when opening modal
+          setMessage('');
+          setShowTimePicker(false);
+          const defaultEndTime = new Date();
+          defaultEndTime.setHours(defaultEndTime.getHours() + 2);
+          setEndTime(roundToNearest15Minutes(defaultEndTime));
+          setShowStatusModal(true);
+        }}
       >
         <TextInput
           style={styles.statusInput}
           placeholder="What's your status?"
           placeholderTextColor="#999"
           editable={false}
+          pointerEvents="none"
           value={currentStatus ? `${currentStatus.status}${currentStatus.message ? `: ${currentStatus.message}` : ''}` : ''}
         />
       </Pressable>
@@ -148,51 +188,85 @@ function ActivityScreenContent() {
         onRequestClose={() => setShowStatusModal(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Set your status</Text>
-            <Pressable onPress={() => setShowStatusModal(false)}>
-              <Text style={styles.modalCloseButton}>Close</Text>
+          <View style={[styles.modalHeader, { paddingTop: insets.top + 16 }]}>
+            <Pressable onPress={() => setShowStatusModal(false)} style={styles.closeButton}>
+              <Ionicons name="close" size={28} color="#000" />
             </Pressable>
+            <Text style={styles.modalTitle}>Set your status</Text>
+            {isFormReady && (
+              <Pressable 
+                onPress={handleSaveStatus}
+                style={styles.checkmarkButton}
+                disabled={createStatusMutation.isPending}
+              >
+                <Ionicons 
+                  name="checkmark" 
+                  size={28} 
+                  color={createStatusMutation.isPending ? "#999" : "#007AFF"} 
+                />
+              </Pressable>
+            )}
+            {!isFormReady && <View style={styles.checkmarkButton} />}
           </View>
           <ScrollView style={styles.modalContent}>
-            {currentStatus && (
-              <View style={styles.currentStatusContainer}>
-                <Text style={styles.currentStatusLabel}>Current Status:</Text>
-                <Text style={styles.currentStatusText}>{currentStatus.status}</Text>
-                {currentStatus.message && (
-                  <Text style={styles.currentStatusMessage}>{currentStatus.message}</Text>
-                )}
-              </View>
-            )}
-
-            <StatusPicker value={status} onChange={setStatus} />
-
             <View style={styles.messageContainer}>
-              <Text style={styles.messageLabel}>Status Message (Optional)</Text>
               <TextInput
                 value={message}
                 onChangeText={setMessage}
-                placeholder="e.g., Free for coffee"
+                placeholder="What's your status?"
                 style={styles.messageInput}
+                multiline
+                maxLength={140}
+                autoFocus
               />
+              <Text style={styles.characterCount}>
+                {message.length}/140
+              </Text>
             </View>
 
-            <TimeWindowPicker
-              startTime={startTime}
-              endTime={endTime}
-              onStartTimeChange={setStartTime}
-              onEndTimeChange={setEndTime}
-            />
-
-            <Pressable
-              onPress={handleSaveStatus}
-              style={[styles.saveButton, createStatusMutation.isPending && styles.saveButtonDisabled]}
-              disabled={createStatusMutation.isPending}
-            >
-              <Text style={styles.saveButtonText}>
-                {createStatusMutation.isPending ? 'Saving...' : 'Save Status'}
-              </Text>
-            </Pressable>
+            <View style={styles.timePickerContainer}>
+              <Pressable 
+                style={styles.clearAfterButton}
+                onPress={() => setShowTimePicker(!showTimePicker)}
+              >
+                <Text style={styles.clearAfterButtonText}>
+                  Clear after...
+                </Text>
+                <Ionicons 
+                  name={showTimePicker ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="#007AFF" 
+                />
+              </Pressable>
+              
+              {showTimePicker && (
+                <View style={styles.timePickerWrapper}>
+                  {Platform.OS === 'ios' ? (
+                    <DateTimePicker
+                      value={endTime}
+                      mode="time"
+                      display="spinner"
+                      minuteInterval={15}
+                      onChange={handleTimeChange}
+                      style={styles.timePicker}
+                    />
+                  ) : (
+                    <DateTimePicker
+                      value={endTime}
+                      mode="time"
+                      minuteInterval={15}
+                      onChange={handleTimeChange}
+                    />
+                  )}
+                </View>
+              )}
+              
+              {!showTimePicker && endTime && (
+                <Text style={styles.selectedTimeText}>
+                  {endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              )}
+            </View>
           </ScrollView>
         </View>
       </Modal>
@@ -268,75 +342,86 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    paddingTop: 60,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    minHeight: 60,
+  },
+  closeButton: {
+    padding: 4,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  modalCloseButton: {
-    fontSize: 16,
-    color: '#007AFF',
+    fontSize: 20,
     fontWeight: '600',
+    color: '#000',
+    flex: 1,
+    textAlign: 'center',
+  },
+  checkmarkButton: {
+    padding: 4,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
     flex: 1,
     padding: 20,
   },
-  currentStatusContainer: {
-    marginBottom: 20,
-    padding: 12,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-  },
-  currentStatusLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  currentStatusText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-  },
-  currentStatusMessage: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
   messageContainer: {
-    marginVertical: 20,
-  },
-  messageLabel: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#000',
+    marginBottom: 24,
   },
   messageInput: {
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
     color: '#000',
     backgroundColor: '#fff',
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
-  saveButton: {
-    backgroundColor: '#007AFF',
-    padding: 15,
-    marginTop: 20,
-    borderRadius: 8,
+  characterCount: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  timePickerContainer: {
+    marginBottom: 20,
+  },
+  clearAfterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  clearAfterButtonText: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '500',
+  },
+  timePickerWrapper: {
+    marginTop: 12,
     alignItems: 'center',
   },
-  saveButtonDisabled: {
-    backgroundColor: '#e0e0e0',
+  timePicker: {
+    width: '100%',
+    height: 200,
   },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  selectedTimeText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+    paddingLeft: 16,
   },
 });
