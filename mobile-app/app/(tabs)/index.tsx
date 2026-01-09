@@ -8,11 +8,14 @@ import { useEffect, useState, useRef } from 'react';
 import * as Contacts from 'expo-contacts';
 import * as Clipboard from 'expo-clipboard';
 import { hashPhones } from '../../lib/phone-hash.util';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function HomeScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const api = createApi(getToken);
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [deviceContacts, setDeviceContacts] = useState<Array<{ name: string; phone: string }>>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
@@ -22,6 +25,55 @@ function HomeScreenContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [contactsInPlaza, setContactsInPlaza] = useState<Set<string>>(new Set()); // Track which phone numbers are Plaza users
   const appState = useRef(AppState.currentState);
+
+  // All hooks must be called before any conditional returns
+  const { data: contacts, isLoading, refetch } = useQuery({
+    queryKey: ['contacts'],
+    queryFn: api.getContacts,
+    enabled: isLoaded && isSignedIn,
+  });
+
+  const { data: statuses } = useQuery({
+    queryKey: ['contacts-statuses'],
+    queryFn: api.getContactsStatuses,
+    enabled: isLoaded && isSignedIn,
+    refetchInterval: 10000, // Poll every 10 seconds
+  });
+
+  // Mutation for checking which contacts are users
+  const checkContactsMutation = useMutation({
+    mutationFn: api.checkContacts,
+  });
+
+  // Mutation for matching contacts (now uses phone hashes)
+  const matchContactsMutation = useMutation({
+    mutationFn: api.matchContacts,
+    onSuccess: (data) => {
+      // Refresh contacts list
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      // Note: Alert is handled in the done button handler to avoid duplicate alerts
+    },
+    onError: (error: any) => {
+      console.error('Error matching contacts:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to match contacts. Please try again.',
+        [{ text: 'OK' }]
+      );
+    },
+  });
+
+  // Calculate header padding
+  const headerPaddingTop = insets.top + 16;
+  
+  // Show Plaza users in the contacts list (people you can actually interact with)
+  // These are contacts that have been matched and added via the Contact table
+  const contactsWithStatus = contacts?.map((contact: any) => ({
+    ...contact,
+    status: statuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
+  })) || [];
+
 
   // Function to load contacts
   const loadContacts = async () => {
@@ -236,55 +288,6 @@ function HomeScreenContent() {
     return <Redirect href="/(auth)/sign-in" />;
   }
 
-    const { data: contacts, isLoading, refetch } = useQuery({
-      queryKey: ['contacts'],
-      queryFn: api.getContacts,
-      enabled: isLoaded && isSignedIn,
-    });
-
-    // Note: Selected contacts are saved but not displayed in the main contacts list
-    // They will only appear once they join Plaza and become actual contacts
-    // This is for future invite tracking features (pending invites, resend options)
-
-    const { data: statuses } = useQuery({
-      queryKey: ['contacts-statuses'],
-      queryFn: api.getContactsStatuses,
-      enabled: isLoaded && isSignedIn,
-      refetchInterval: 10000, // Poll every 10 seconds
-    });
-
-  // Mutation for checking which contacts are users
-  const checkContactsMutation = useMutation({
-    mutationFn: api.checkContacts,
-  });
-
-  // Mutation for matching contacts (now uses phone hashes)
-  const matchContactsMutation = useMutation({
-    mutationFn: api.matchContacts,
-    onSuccess: (data) => {
-      // Refresh contacts list
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
-      // Note: Alert is handled in the done button handler to avoid duplicate alerts
-    },
-    onError: (error: any) => {
-      console.error('Error matching contacts:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to match contacts. Please try again.',
-        [{ text: 'OK' }]
-      );
-    },
-  });
-
-  // Show Plaza users in the contacts list (people you can actually interact with)
-  // These are contacts that have been matched and added via the Contact table
-  const contactsWithStatus = contacts?.map((contact: any) => ({
-    ...contact,
-    status: statuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
-  })) || [];
-  
-
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -292,9 +295,18 @@ function HomeScreenContent() {
       </View>
     );
   }
-
+  
   return (
     <View style={{ flex: 1 }}>
+      <View style={[styles.headerContainer, { paddingTop: headerPaddingTop }]}>
+        <Text style={styles.headerTitle}>Contacts</Text>
+        <Pressable 
+          style={styles.addButton}
+          onPress={() => setShowSyncModal(true)}
+        >
+          <Ionicons name="add-circle" size={32} color="#007AFF" />
+        </Pressable>
+      </View>
       <FlatList
         data={contactsWithStatus}
         keyExtractor={(item) => item.id}
@@ -657,6 +669,31 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    minHeight: 60,
+    zIndex: 10,
+    elevation: 5, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  addButton: {
+    padding: 4,
+  },
   syncButton: {
     backgroundColor: '#007AFF',
     padding: 12,
