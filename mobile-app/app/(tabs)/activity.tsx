@@ -19,6 +19,19 @@ const roundToNearest15Minutes = (date: Date): Date => {
   return rounded;
 };
 
+// Helper function to round UP to next 15-minute interval, then add 15 minutes
+const getDefaultEndTime = (): Date => {
+  const now = new Date();
+  const minutes = now.getMinutes();
+  // Round UP to next 15-minute interval
+  const roundedUpMinutes = Math.ceil(minutes / 15) * 15;
+  const roundedUp = new Date(now);
+  roundedUp.setMinutes(roundedUpMinutes, 0, 0);
+  // Add 15 minutes
+  roundedUp.setMinutes(roundedUp.getMinutes() + 15);
+  return roundedUp;
+};
+
 function ActivityScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const api = createApi(getToken);
@@ -29,10 +42,8 @@ function ActivityScreenContent() {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [message, setMessage] = useState('');
   
-  const [endTime, setEndTime] = useState(() => {
-    const end = new Date();
-    end.setHours(end.getHours() + 2);
-    return roundToNearest15Minutes(end);
+  const [endTime, setEndTime] = useState<Date | null>(() => {
+    return getDefaultEndTime();
   });
 
   // All hooks must be called before any conditional returns
@@ -62,9 +73,7 @@ function ActivityScreenContent() {
       queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
       // Reset form state
       setMessage('');
-      const defaultEndTime = new Date();
-      defaultEndTime.setHours(defaultEndTime.getHours() + 2);
-      setEndTime(roundToNearest15Minutes(defaultEndTime));
+      setEndTime(getDefaultEndTime());
       setShowStatusModal(false);
       Alert.alert('Success', 'Your status has been set!');
     },
@@ -100,9 +109,16 @@ function ActivityScreenContent() {
   };
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
-    // With inline spinner, the time updates continuously as user scrolls
-    if (selectedDate) {
-      setEndTime(roundToNearest15Minutes(selectedDate));
+    // On iOS, only update when user confirms selection (event.type === 'set')
+    if (Platform.OS === 'ios') {
+      if (event.type === 'set' && selectedDate) {
+        setEndTime(roundToNearest15Minutes(selectedDate));
+      }
+    } else {
+      // Android
+      if (selectedDate) {
+        setEndTime(roundToNearest15Minutes(selectedDate));
+      }
     }
   };
 
@@ -139,9 +155,7 @@ function ActivityScreenContent() {
         onPress={() => {
           // Reset form state when opening modal
           setMessage('');
-          const defaultEndTime = new Date();
-          defaultEndTime.setHours(defaultEndTime.getHours() + 2);
-          setEndTime(roundToNearest15Minutes(defaultEndTime));
+          setEndTime(getDefaultEndTime());
           setShowStatusModal(true);
         }}
       >
@@ -225,7 +239,7 @@ function ActivityScreenContent() {
               </Text>
               {Platform.OS === 'ios' ? (
                 <DateTimePicker
-                  value={endTime}
+                  value={endTime || new Date()}
                   mode="time"
                   display="default"
                   minuteInterval={15}
@@ -233,7 +247,7 @@ function ActivityScreenContent() {
                 />
               ) : (
                 <DateTimePicker
-                  value={endTime}
+                  value={endTime || new Date()}
                   mode="time"
                   minuteInterval={15}
                   onChange={handleTimeChange}
@@ -370,9 +384,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     gap: 16,
-  },
-  timePicker: {
-    flex: 1,
   },
   clearAfterButtonText: {
     fontSize: 16,
