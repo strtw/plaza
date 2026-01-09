@@ -41,6 +41,7 @@ function ActivityScreenContent() {
   // Modal state
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [message, setMessage] = useState('');
+  const [location, setLocation] = useState<'home' | 'greenspace' | 'third-place' | null>(null);
   
   const [endTime, setEndTime] = useState<Date | null>(() => {
     return getDefaultEndTime();
@@ -73,6 +74,7 @@ function ActivityScreenContent() {
       queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
       // Reset form state
       setMessage('');
+      setLocation(null);
       setEndTime(getDefaultEndTime());
       setShowStatusModal(false);
       Alert.alert('Success', 'Your status has been set!');
@@ -155,6 +157,7 @@ function ActivityScreenContent() {
         onPress={() => {
           // Reset form state when opening modal
           setMessage('');
+          setLocation(null);
           setEndTime(getDefaultEndTime());
           setShowStatusModal(true);
         }}
@@ -235,6 +238,48 @@ function ActivityScreenContent() {
               <Text style={styles.characterCount}>
                 {message.length}/140
               </Text>
+            </View>
+
+            <View style={styles.locationSelectorContainer}>
+              <Pressable
+                style={[styles.locationOption, location === 'home' && styles.locationOptionSelected]}
+                onPress={() => setLocation('home')}
+              >
+                <Ionicons 
+                  name="home-outline" 
+                  size={24} 
+                  color={location === 'home' ? '#007AFF' : '#666'} 
+                />
+                <Text style={[styles.locationOptionText, location === 'home' && styles.locationOptionTextSelected]}>
+                  Home
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.locationOption, location === 'greenspace' && styles.locationOptionSelected]}
+                onPress={() => setLocation('greenspace')}
+              >
+                <Ionicons 
+                  name="leaf" 
+                  size={24} 
+                  color={location === 'greenspace' ? '#007AFF' : '#666'} 
+                />
+                <Text style={[styles.locationOptionText, location === 'greenspace' && styles.locationOptionTextSelected]}>
+                  Greenspace
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.locationOption, location === 'third-place' && styles.locationOptionSelected]}
+                onPress={() => setLocation('third-place')}
+              >
+                <Ionicons 
+                  name="business" 
+                  size={24} 
+                  color={location === 'third-place' ? '#007AFF' : '#666'} 
+                />
+                <Text style={[styles.locationOptionText, location === 'third-place' && styles.locationOptionTextSelected]}>
+                  Third Place
+                </Text>
+              </Pressable>
             </View>
 
             <View style={styles.timePickerContainer}>
@@ -390,6 +435,37 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'right',
     marginTop: 4,
+  },
+  locationSelectorContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  locationOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  locationOptionSelected: {
+    borderColor: '#007AFF',
+    backgroundColor: '#f0f8ff',
+  },
+  locationOptionText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  locationOptionTextSelected: {
+    color: '#007AFF',
+    fontWeight: '600',
   },
   timePickerContainer: {
     flexDirection: 'row',
