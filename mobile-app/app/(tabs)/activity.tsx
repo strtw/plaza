@@ -28,7 +28,6 @@ function ActivityScreenContent() {
   // Modal state
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [message, setMessage] = useState('');
-  const [showTimePicker, setShowTimePicker] = useState(false);
   
   const [endTime, setEndTime] = useState(() => {
     const end = new Date();
@@ -63,7 +62,6 @@ function ActivityScreenContent() {
       queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
       // Reset form state
       setMessage('');
-      setShowTimePicker(false);
       const defaultEndTime = new Date();
       defaultEndTime.setHours(defaultEndTime.getHours() + 2);
       setEndTime(roundToNearest15Minutes(defaultEndTime));
@@ -102,9 +100,7 @@ function ActivityScreenContent() {
   };
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowTimePicker(false);
-    }
+    // With inline spinner, the time updates continuously as user scrolls
     if (selectedDate) {
       setEndTime(roundToNearest15Minutes(selectedDate));
     }
@@ -143,7 +139,6 @@ function ActivityScreenContent() {
         onPress={() => {
           // Reset form state when opening modal
           setMessage('');
-          setShowTimePicker(false);
           const defaultEndTime = new Date();
           defaultEndTime.setHours(defaultEndTime.getHours() + 2);
           setEndTime(roundToNearest15Minutes(defaultEndTime));
@@ -225,46 +220,24 @@ function ActivityScreenContent() {
             </View>
 
             <View style={styles.timePickerContainer}>
-              <Pressable 
-                style={styles.clearAfterButton}
-                onPress={() => setShowTimePicker(!showTimePicker)}
-              >
-                <Text style={styles.clearAfterButtonText}>
-                  Clear after...
-                </Text>
-                <Ionicons 
-                  name={showTimePicker ? "chevron-up" : "chevron-down"} 
-                  size={20} 
-                  color="#007AFF" 
+              <Text style={styles.clearAfterButtonText}>
+                Clear after...
+              </Text>
+              {Platform.OS === 'ios' ? (
+                <DateTimePicker
+                  value={endTime}
+                  mode="time"
+                  display="default"
+                  minuteInterval={15}
+                  onChange={handleTimeChange}
                 />
-              </Pressable>
-              
-              {showTimePicker && (
-                <View style={styles.timePickerWrapper}>
-                  {Platform.OS === 'ios' ? (
-                    <DateTimePicker
-                      value={endTime}
-                      mode="time"
-                      display="spinner"
-                      minuteInterval={15}
-                      onChange={handleTimeChange}
-                      style={styles.timePicker}
-                    />
-                  ) : (
-                    <DateTimePicker
-                      value={endTime}
-                      mode="time"
-                      minuteInterval={15}
-                      onChange={handleTimeChange}
-                    />
-                  )}
-                </View>
-              )}
-              
-              {!showTimePicker && endTime && (
-                <Text style={styles.selectedTimeText}>
-                  {endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
+              ) : (
+                <DateTimePicker
+                  value={endTime}
+                  mode="time"
+                  minuteInterval={15}
+                  onChange={handleTimeChange}
+                />
               )}
             </View>
           </ScrollView>
@@ -393,35 +366,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   timePickerContainer: {
-    marginBottom: 20,
-  },
-  clearAfterButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    marginBottom: 20,
+    gap: 16,
+  },
+  timePicker: {
+    flex: 1,
   },
   clearAfterButtonText: {
     fontSize: 16,
     color: '#000',
-    fontWeight: '500',
-  },
-  timePickerWrapper: {
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  timePicker: {
-    width: '100%',
-    height: 200,
-  },
-  selectedTimeText: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-    paddingLeft: 16,
+    fontWeight: '600',
   },
 });
