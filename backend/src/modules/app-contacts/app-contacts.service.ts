@@ -76,7 +76,8 @@ export class AppContactsService {
           plazaUser: {
             select: {
               id: true,
-              name: true,
+              firstName: true,
+              lastName: true,
               email: true,
               phoneHash: true,
             },
