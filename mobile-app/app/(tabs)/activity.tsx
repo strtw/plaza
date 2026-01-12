@@ -2,7 +2,7 @@ import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Mo
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
-import { AvailabilityStatus, StatusLocation } from '../../lib/types';
+import { AvailabilityStatus, StatusLocation, ContactStatus } from '../../lib/types';
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -91,9 +91,38 @@ function ActivityScreenContent() {
 
   const createStatusMutation = useMutation({
     mutationFn: api.createStatus,
-    onSuccess: () => {
+    onMutate: async (newStatus) => {
+      // Cancel outgoing queries
+      await queryClient.cancelQueries({ queryKey: ['my-status'] });
+      
+      // Snapshot previous value
+      const previousStatus = queryClient.getQueryData(['my-status']);
+      
+      // Create optimistic status object (matches ContactStatus interface)
+      const optimisticStatus = {
+        id: `temp-${Date.now()}`, // Temporary ID
+        status: newStatus.status,
+        message: newStatus.message,
+        location: newStatus.location,
+        startTime: newStatus.startTime,
+        endTime: newStatus.endTime,
+      } as ContactStatus;
+      
+      // Optimistically update cache and store immediately
+      queryClient.setQueryData(['my-status'], optimisticStatus);
+      setCurrentStatus(optimisticStatus);
+      
+      return { previousStatus };
+    },
+    onSuccess: (data) => {
+      // Update with real data from server (includes real ID and all fields)
+      queryClient.setQueryData(['my-status'], data);
+      setCurrentStatus(data as ContactStatus);
+      
+      // Invalidate to ensure everything is in sync
       queryClient.invalidateQueries({ queryKey: ['my-status'] });
       queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      
       // Reset form state
       setMessage('');
       setLocation(null);
@@ -101,7 +130,12 @@ function ActivityScreenContent() {
       setShowStatusModal(false);
       Alert.alert('Success', 'Your status has been set!');
     },
-    onError: (error: any) => {
+    onError: (error: any, variables, context) => {
+      // Rollback optimistic update
+      if (context?.previousStatus) {
+        queryClient.setQueryData(['my-status'], context.previousStatus);
+        setCurrentStatus(context.previousStatus as ContactStatus | null);
+      }
       Alert.alert('Error', error.message || 'Failed to set status. Please try again.');
     },
   });
