@@ -2,7 +2,7 @@ import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Mo
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
-import { AvailabilityStatus, StatusLocation, ContactStatus } from '../../lib/types';
+import { AvailabilityStatus, StatusLocation, ContactStatus, getFullName } from '../../lib/types';
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -78,6 +78,12 @@ function ActivityScreenContent() {
     queryFn: api.getMyStatus,
     enabled: isLoaded && isSignedIn,
     refetchInterval: 10000, // Poll every 10 seconds
+  });
+
+  const { data: currentUser } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: api.getOrCreateMe,
+    enabled: isLoaded && isSignedIn,
   });
 
   // Sync API response to store
@@ -171,6 +177,28 @@ function ActivityScreenContent() {
 
   // Calculate header padding
   const headerPaddingTop = insets.top + 16;
+  
+  // Avatar helper functions
+  const getInitials = () => {
+    if (!currentUser) return '?';
+    const fullName = getFullName(currentUser);
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return fullName.substring(0, 2).toUpperCase();
+  };
+
+  const getAvatarColor = () => {
+    if (!currentUser) return '#E5E5E5';
+    const fullName = getFullName(currentUser);
+    const colors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+      '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52BE80'
+    ];
+    const index = fullName.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
   
   // Merge contacts with their statuses
   const contactsWithStatus = contacts?.map((contact: any) => ({
@@ -271,7 +299,24 @@ function ActivityScreenContent() {
         }}
       >
         <View style={styles.statusInputWrapper}>
-          <Ionicons name="create-outline" size={20} color="#666" style={styles.composeIcon} />
+          {/* Avatar placeholder with status-aware styling */}
+          <View style={[
+            styles.avatarContainer,
+            (!storeStatus || !currentStatus) 
+              ? styles.avatarContainerInactive 
+              : (storeStatus.status === AvailabilityStatus.AVAILABLE 
+                  ? styles.avatarContainerActive 
+                  : styles.avatarContainerInactive)
+          ]}>
+            <View style={[
+              styles.avatar,
+              (!storeStatus || !currentStatus) 
+                ? { backgroundColor: '#E5E5E5' }
+                : { backgroundColor: getAvatarColor() }
+            ]}>
+              <Text style={styles.avatarText}>{getInitials()}</Text>
+            </View>
+          </View>
           <TextInput
             style={styles.statusInput}
             placeholder="What's your status?"
@@ -538,8 +583,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  composeIcon: {
+  avatarContainer: {
     marginRight: 12,
+    borderRadius: 22,
+    borderWidth: 2.5,
+    padding: 2,
+  },
+  avatarContainerInactive: {
+    borderColor: '#CCCCCC',
+  },
+  avatarContainerActive: {
+    borderColor: '#25D366', // WhatsApp green
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E5E5E5',
+  },
+  avatarText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
   statusInput: {
     flex: 1,
