@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
 import { StatusService } from './status.service';
 import { CreateStatusDto } from './dto/create-status.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -83,6 +83,29 @@ export class StatusController {
       console.error('Error in getContactsStatuses controller:', error);
       // Return empty array instead of throwing to prevent 500 errors
       return [];
+    }
+  }
+
+  @Delete('me')
+  async deleteMyStatus(@Request() req) {
+    try {
+      const clerkId = req.userId;
+      console.log('[StatusController] Deleting status for Clerk ID:', clerkId);
+      
+      const databaseUserId = await this.getDatabaseUserId(clerkId);
+      const result = await this.statusService.deleteStatus(databaseUserId);
+      
+      return {
+        success: true,
+        message: 'Status deleted successfully',
+        deletedCount: result.deletedCount,
+      };
+    } catch (error: any) {
+      console.error('[StatusController] Error deleting status:', error);
+      throw new HttpException(
+        error?.message || 'Failed to delete status',
+        error?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 }

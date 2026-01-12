@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { AvailabilityStatus } from '../lib/types';
+import { ContactStatus } from '../lib/types';
 
 interface UserState {
-  currentStatus: AvailabilityStatus | null;
-  setCurrentStatus: (status: AvailabilityStatus) => void;
+  currentStatus: ContactStatus | null;
+  setCurrentStatus: (status: ContactStatus | null) => void;
 }
 
 export const useUserStore = create<UserState>((set) => ({

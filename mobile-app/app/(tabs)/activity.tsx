@@ -2,13 +2,14 @@ import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Mo
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
-import { AvailabilityStatus } from '../../lib/types';
+import { AvailabilityStatus, StatusLocation } from '../../lib/types';
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useUserStore } from '../../stores/userStore';
 
 // Helper function to round time to nearest 15 minutes
 const roundToNearest15Minutes = (date: Date): Date => {
@@ -32,11 +33,22 @@ const getDefaultEndTime = (): Date => {
   return roundedUp;
 };
 
+// Helper to map backend location enum to frontend format
+const mapBackendToFrontendLocation = (location: StatusLocation): 'home' | 'greenspace' | 'third-place' | null => {
+  const map: Record<StatusLocation, 'home' | 'greenspace' | 'third-place'> = {
+    'HOME': 'home',
+    'GREENSPACE': 'greenspace',
+    'THIRD_PLACE': 'third-place',
+  };
+  return map[location] || null;
+};
+
 function ActivityScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const api = createApi(getToken);
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
+  const { currentStatus: storeStatus, setCurrentStatus } = useUserStore();
 
   // Modal state
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -65,7 +77,17 @@ function ActivityScreenContent() {
     queryKey: ['my-status'],
     queryFn: api.getMyStatus,
     enabled: isLoaded && isSignedIn,
+    refetchInterval: 10000, // Poll every 10 seconds
   });
+
+  // Sync API response to store
+  useEffect(() => {
+    if (currentStatus) {
+      setCurrentStatus(currentStatus);
+    } else {
+      setCurrentStatus(null);
+    }
+  }, [currentStatus, setCurrentStatus]);
 
   const createStatusMutation = useMutation({
     mutationFn: api.createStatus,
@@ -81,6 +103,35 @@ function ActivityScreenContent() {
     },
     onError: (error: any) => {
       Alert.alert('Error', error.message || 'Failed to set status. Please try again.');
+    },
+  });
+
+  const deleteStatusMutation = useMutation({
+    mutationFn: api.deleteMyStatus,
+    onMutate: async () => {
+      // Optimistic update: immediately remove from store
+      setCurrentStatus(null);
+      // Cancel outgoing queries
+      await queryClient.cancelQueries({ queryKey: ['my-status'] });
+      // Snapshot previous value
+      const previousStatus = queryClient.getQueryData(['my-status']);
+      // Optimistically set to null
+      queryClient.setQueryData(['my-status'], null);
+      return { previousStatus };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-status'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      setShowStatusModal(false);
+      Alert.alert('Success', 'Your status has been cleared!');
+    },
+    onError: (error: any, variables, context) => {
+      // Rollback optimistic update
+      if (context?.previousStatus) {
+        queryClient.setQueryData(['my-status'], context.previousStatus);
+        setCurrentStatus(context.previousStatus as any);
+      }
+      Alert.alert('Error', error.message || 'Failed to clear status. Please try again.');
     },
   });
 
@@ -172,10 +223,16 @@ function ActivityScreenContent() {
       <Pressable 
         style={styles.statusInputContainer}
         onPress={() => {
-          // Reset form state when opening modal
-          setMessage('');
-          setLocation(null);
-          setEndTime(getDefaultEndTime());
+          // Populate form with current status if it exists, otherwise reset
+          if (storeStatus) {
+            setMessage(storeStatus.message);
+            setLocation(mapBackendToFrontendLocation(storeStatus.location));
+            setEndTime(new Date(storeStatus.endTime));
+          } else {
+            setMessage('');
+            setLocation(null);
+            setEndTime(getDefaultEndTime());
+          }
           setShowStatusModal(true);
         }}
       >
@@ -360,6 +417,32 @@ function ActivityScreenContent() {
               </View>
               <Text style={styles.helperText}>When should your status automatically clear?</Text>
             </View>
+
+            {/* Clear Status Button */}
+            {storeStatus && (
+              <View style={styles.clearStatusContainer}>
+                <Pressable
+                  style={styles.clearStatusButton}
+                  onPress={() => {
+                    Alert.alert(
+                      'Clear Status',
+                      'Are you sure you want to clear your current status?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Clear',
+                          style: 'destructive',
+                          onPress: () => deleteStatusMutation.mutate(),
+                        },
+                      ]
+                    );
+                  }}
+                  disabled={deleteStatusMutation.isPending}
+                >
+                  <Text style={styles.clearStatusText}>Clear Status</Text>
+                </Pressable>
+              </View>
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -572,6 +655,24 @@ const styles = StyleSheet.create({
   clearAfterButtonText: {
     fontSize: 16,
     color: '#000',
+    fontWeight: '600',
+  },
+  clearStatusContainer: {
+    marginTop: 20,
+    marginBottom: 20,
+    alignItems: 'flex-end',
+  },
+  clearStatusButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#FF3B30',
+    backgroundColor: 'transparent',
+  },
+  clearStatusText: {
+    fontSize: 16,
+    color: '#FF3B30',
     fontWeight: '600',
   },
 });

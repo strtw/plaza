@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { StatusModule } from './modules/status/status.module';
@@ -10,6 +11,7 @@ import { AppContactsModule } from './modules/app-contacts/app-contacts.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     StatusModule,
     ContactsModule,
     InvitesModule,

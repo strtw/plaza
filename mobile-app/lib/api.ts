@@ -92,6 +92,10 @@ export const createApi = (getToken: () => Promise<string | null>) => {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    deleteMyStatus: () =>
+      fetchApi('/status/me', {
+        method: 'DELETE',
+      }),
     generateInvite: () =>
       fetchApi('/invites/generate', { method: 'POST' }),
     getInvite: (code: string) => fetchApi(`/invites/${code}`),

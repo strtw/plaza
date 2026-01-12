@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { PrismaClient, AvailabilityStatus, ContactStatus, StatusLocation } from '@prisma/client';
 import { CreateStatusDto } from './dto/create-status.dto';
 
@@ -13,14 +14,13 @@ export class StatusService {
       console.log('[StatusService] Creating status for userId:', userId);
       console.log('[StatusService] DTO:', JSON.stringify(dto, null, 2));
       
-      // Delete expired statuses for this user before creating new one
+      // Delete ALL statuses for this user before creating new one (ensures only one status exists)
       const deletedCount = await prisma.status.deleteMany({
         where: {
           userId,
-          endTime: { lt: now },
         },
       });
-      console.log('[StatusService] Deleted', deletedCount.count, 'expired statuses');
+      console.log('[StatusService] Deleted', deletedCount.count, 'existing statuses for user');
       
       const statusData = {
         userId,
@@ -128,6 +128,45 @@ export class StatusService {
         name: error?.name,
       });
       return []; // Return empty array on error to prevent breaking the app
+    }
+  }
+
+  /**
+   * Delete all statuses for a user (used for status cancellation)
+   */
+  async deleteStatus(userId: string) {
+    try {
+      const deletedCount = await prisma.status.deleteMany({
+        where: {
+          userId,
+        },
+      });
+      console.log('[StatusService] Deleted', deletedCount.count, 'statuses for user:', userId);
+      return { deletedCount: deletedCount.count };
+    } catch (error: any) {
+      console.error('[StatusService] Error deleting status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cleanup expired statuses for all users
+   * Runs every 15 minutes via cron job
+   */
+  @Cron('*/15 * * * *') // Every 15 minutes
+  async cleanupExpiredStatuses() {
+    try {
+      const now = new Date();
+      const deletedCount = await prisma.status.deleteMany({
+        where: {
+          endTime: { lt: now },
+        },
+      });
+      console.log('[StatusService] Cleanup: Deleted', deletedCount.count, 'expired statuses');
+      return { deletedCount: deletedCount.count };
+    } catch (error: any) {
+      console.error('[StatusService] Error in cleanup job:', error);
+      // Don't throw - we don't want cron job failures to crash the app
     }
   }
 }
