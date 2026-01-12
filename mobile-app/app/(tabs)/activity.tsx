@@ -199,6 +199,51 @@ function ActivityScreenContent() {
     const index = fullName.charCodeAt(0) % colors.length;
     return colors[index];
   };
+
+  // Time remaining calculation and update
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const getTimeRemaining = (endTime: string): string => {
+    const end = new Date(endTime);
+    const now = currentTime;
+    const diffMs = end.getTime() - now.getTime();
+
+    if (diffMs <= 0) {
+      return 'Expired';
+    }
+
+    const diffMinutes = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const remainingMinutes = diffMinutes % 60;
+
+    if (diffHours >= 1) {
+      if (remainingMinutes > 0) {
+        // Format: "1h 15m" or "2h 30m"
+        return `${diffHours}h ${remainingMinutes}m`;
+      }
+      // Exactly X hours: "1 more hour" or "2 more hours"
+      if (diffHours === 1) {
+        return '1 more hour';
+      }
+      return `${diffHours} more hours`;
+    }
+
+    if (diffMinutes >= 1) {
+      // Format: "18 more min"
+      return `${diffMinutes} more min`;
+    }
+
+    return '<1m';
+  };
   
   // Merge contacts with their statuses
   const contactsWithStatus = contacts?.map((contact: any) => ({
@@ -323,7 +368,12 @@ function ActivityScreenContent() {
             placeholderTextColor="#333"
             editable={false}
             pointerEvents="none"
-            value={currentStatus ? `${currentStatus.status}${currentStatus.message ? `: ${currentStatus.message}` : ''}` : ''}
+            value={
+              currentStatus?.message
+                ? `${currentStatus.message}...for ${getTimeRemaining(currentStatus.endTime)}`
+                : ''
+            }
+            numberOfLines={1}
           />
         </View>
       </Pressable>
