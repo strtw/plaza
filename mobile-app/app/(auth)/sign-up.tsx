@@ -127,7 +127,7 @@ export default function SignUpScreen() {
             console.log('Account created with firstName:', firstName.trim(), 'lastName:', lastName.trim());
 
             // Navigate to app immediately after successful account creation
-            router.replace('/(tabs)');
+            router.replace('/(tabs)/activity');
           } catch (error: any) {
             console.error('Error creating account:', error);
             setError(error.message || 'Failed to create account. Please try again.');
@@ -166,7 +166,7 @@ export default function SignUpScreen() {
                 await api.createAccount(firstName.trim(), lastName.trim());
                 console.log('Account created with firstName:', firstName.trim(), 'lastName:', lastName.trim());
                 // Navigate immediately after successful account creation
-                router.replace('/(tabs)');
+                router.replace('/(tabs)/activity');
               } catch (error: any) {
                 console.error('Error creating account:', error);
                 setError(error.message || 'Failed to create account. Please try again.');
@@ -219,7 +219,7 @@ export default function SignUpScreen() {
               await api.createAccount(firstName.trim(), lastName.trim());
               console.log('Account created with firstName:', firstName.trim(), 'lastName:', lastName.trim());
               // Navigate immediately after successful account creation
-              router.replace('/(tabs)');
+              router.replace('/(tabs)/activity');
             } catch (error: any) {
               console.error('Error creating account:', error);
               setError(error.message || 'Failed to create account. Please try again.');
@@ -246,7 +246,7 @@ export default function SignUpScreen() {
             await api.createAccount(firstName.trim(), lastName.trim());
             console.log('Account created with firstName:', firstName.trim(), 'lastName:', lastName.trim());
             // Navigate immediately after successful account creation
-            router.replace('/(tabs)');
+            router.replace('/(tabs)/activity');
           } catch (error: any) {
             console.error('Error creating account:', error);
             setError(error.message || 'Failed to create account. Please try again.');
@@ -271,12 +271,12 @@ export default function SignUpScreen() {
               const api = createApi(getToken);
               await api.createAccount(firstName.trim(), lastName.trim());
               console.log('Account created after session exists error');
-              router.replace('/(tabs)');
+              router.replace('/(tabs)/activity');
               return;
             } catch (error: any) {
               // If account creation fails, user might already exist - try to navigate anyway
               console.log('Account might already exist, navigating to app...');
-              router.replace('/(tabs)');
+              router.replace('/(tabs)/activity');
               return;
             }
           }

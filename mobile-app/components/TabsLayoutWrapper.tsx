@@ -1,9 +1,10 @@
-import { Slot, useRouter, usePathname } from 'expo-router';
+import { Slot, useRouter } from 'expo-router';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useState } from 'react';
 
 export function TabsLayoutWrapper() {
   const router = useRouter();
-  const pathname = usePathname();
+  const [activeTab, setActiveTab] = useState<'activity' | 'contacts' | 'profile'>('activity');
 
   return (
     <View style={{ flex: 1 }}>
@@ -12,26 +13,35 @@ export function TabsLayoutWrapper() {
       {/* Custom Tab Bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[styles.tab, pathname === '/(tabs)/activity' ? styles.activeTab : null]}
-          onPress={() => router.push('/(tabs)/activity')}
+          style={[styles.tab, activeTab === 'activity' ? styles.activeTab : null]}
+          onPress={() => {
+            setActiveTab('activity');
+            router.push('/(tabs)/activity');
+          }}
         >
-          <Text style={[styles.tabText, pathname === '/(tabs)/activity' ? styles.activeTabText : null]}>
+          <Text style={[styles.tabText, activeTab === 'activity' ? styles.activeTabText : null]}>
             Activity
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, pathname === '/(tabs)' || pathname === '/(tabs)/' ? styles.activeTab : null]}
-          onPress={() => router.push('/(tabs)')}
+          style={[styles.tab, activeTab === 'contacts' ? styles.activeTab : null]}
+          onPress={() => {
+            setActiveTab('contacts');
+            router.push('/(tabs)');
+          }}
         >
-          <Text style={[styles.tabText, pathname === '/(tabs)' || pathname === '/(tabs)/' ? styles.activeTabText : null]}>
+          <Text style={[styles.tabText, activeTab === 'contacts' ? styles.activeTabText : null]}>
             Contacts
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, pathname === '/(tabs)/profile' ? styles.activeTab : null]}
-          onPress={() => router.push('/(tabs)/profile')}
+          style={[styles.tab, activeTab === 'profile' ? styles.activeTab : null]}
+          onPress={() => {
+            setActiveTab('profile');
+            router.push('/(tabs)/profile');
+          }}
         >
-          <Text style={[styles.tabText, pathname === '/(tabs)/profile' ? styles.activeTabText : null]}>
+          <Text style={[styles.tabText, activeTab === 'profile' ? styles.activeTabText : null]}>
             Profile
           </Text>
         </TouchableOpacity>
@@ -55,8 +65,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   activeTab: {
-    borderTopWidth: 2,
-    borderTopColor: '#007AFF',
+    // Blue bar removed - only text color indicates active state
   },
   tabText: {
     fontSize: 14,

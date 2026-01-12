@@ -18,7 +18,7 @@ export default function AuthRoutesLayout() {
   const isOnSignUpScreen = segments.includes('sign-up');
   
   if (isSignedIn && !isOnSignUpScreen) {
-    return <Redirect href="/(tabs)" />;
+    return <Redirect href="/(tabs)/activity" />;
   }
 
   return <Slot />;

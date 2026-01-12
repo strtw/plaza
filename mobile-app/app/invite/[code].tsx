@@ -19,7 +19,7 @@ export default function InviteScreen() {
     mutationFn: () => api.useInvite(code as string),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/activity');
     },
   });
 

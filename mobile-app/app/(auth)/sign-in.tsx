@@ -116,7 +116,7 @@ export default function SignInScreen() {
         // The auth layout will automatically redirect when isSignedIn becomes true
         // But we'll also manually navigate as a fallback
         setTimeout(() => {
-          router.replace('/(tabs)');
+          router.replace('/(tabs)/activity');
         }, 200);
       } else {
         setError('Sign in is not complete. Please try again.');
