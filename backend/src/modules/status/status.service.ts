@@ -153,7 +153,7 @@ export class StatusService {
    * Cleanup expired statuses for all users
    * Runs every 15 minutes via cron job
    */
-  @Cron('*/15 * * * *') // Every 15 minutes
+  @Cron('*/15 * * * *', { name: 'cleanup-expired-statuses' }) // Every 15 minutes
   async cleanupExpiredStatuses() {
     try {
       const now = new Date();
