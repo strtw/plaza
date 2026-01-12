@@ -19,7 +19,7 @@ export class DevService {
    * Phone numbers are hashed before storing (privacy-first design)
    */
   async createMockUsers(contacts: Array<{ phone: string; name: string }>): Promise<{ created: number; users: any[] }> {
-    const createdUsers: Array<{ id: string; name: string }> = [];
+    const createdUsers: Array<{ id: string; firstName: string | null; lastName: string | null }> = [];
 
     for (const contact of contacts) {
       const { phone, name } = contact;
@@ -31,10 +31,20 @@ export class DevService {
       const normalizedPhone = phone.replace(/\D/g, '');
       const testClerkId = `test_${normalizedPhone}`;
 
-      // Use the actual contact name (or fallback if missing)
-      const userName = name || `User ${normalizedPhone.slice(-4)}`;
+      // Parse name into firstName and lastName
+      // If name is provided, split on first space; otherwise use fallback
+      let firstName: string;
+      let lastName: string | null = null;
+      
+      if (name && name.trim()) {
+        const nameParts = name.trim().split(/\s+/);
+        firstName = nameParts[0];
+        lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+      } else {
+        firstName = `User${normalizedPhone.slice(-4)}`;
+      }
 
-      // Create or update user with actual contact name
+      // Create or update user with firstName and lastName
       const existingUser = await prisma.user.findFirst({
         where: { phoneHash },
       });
@@ -43,7 +53,8 @@ export class DevService {
         ? await prisma.user.update({
             where: { id: existingUser.id },
             data: {
-              name: userName,
+              firstName,
+              lastName,
               clerkId: testClerkId,
             },
           })
@@ -51,14 +62,16 @@ export class DevService {
             data: {
               clerkId: testClerkId,
               phoneHash,
-              name: userName,
+              firstName,
+              lastName,
               email: `test.${normalizedPhone}@example.com`,
             },
           });
 
       createdUsers.push({
         id: user.id,
-        name: user.name || userName,
+        firstName: user.firstName,
+        lastName: user.lastName,
         // Note: phone number not returned (privacy-first design)
       });
     }

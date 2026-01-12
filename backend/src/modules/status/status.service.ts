@@ -71,7 +71,8 @@ export class StatusService {
           user: {
             select: {
               id: true,
-              name: true,
+              firstName: true,
+              lastName: true,
               email: true,
               // Note: phone number is not stored in DB (privacy-first design)
             },

@@ -76,7 +76,8 @@ export class InvitesService {
         inviter: {
           select: {
             id: true,
-            name: true,
+            firstName: true,
+            lastName: true,
             email: true,
           },
         },

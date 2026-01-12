@@ -19,7 +19,8 @@ export class ContactsService {
           contactUser: {
             select: {
               id: true,
-              name: true,
+              firstName: true,
+              lastName: true,
               email: true,
               // Note: phone number is not stored in DB (privacy-first design)
               // Mobile app maintains phone numbers locally
@@ -272,7 +273,8 @@ export class ContactsService {
       return {
         existingUsers: existingUsers.map(u => ({ 
           id: u.id, 
-          name: u.name, 
+          firstName: u.firstName, 
+          lastName: u.lastName,
           email: u.email,
           phoneHash: u.phoneHash 
         })),
