@@ -22,33 +22,13 @@ export class ContactsController {
   @Get()
   async getContacts(@Request() req) {
     // Look up Plaza user by Clerk ID
-    let user = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { clerkId: req.userId },
       select: { id: true },
     });
 
-    // If user doesn't exist, create them (for sign-in flow)
     if (!user) {
-      try {
-        const clerkUser = await clerkClient.users.getUser(req.userId);
-        const phoneNumber = clerkUser.primaryPhoneNumber?.phoneNumber;
-        
-        if (!phoneNumber) {
-          throw new HttpException('Phone number not found in Clerk user', HttpStatus.BAD_REQUEST);
-        }
-
-        const createdUser = await this.usersService.findOrCreateByClerkId(
-          req.userId,
-          phoneNumber,
-          clerkUser.emailAddresses[0]?.emailAddress,
-          clerkUser.firstName || undefined,
-          clerkUser.lastName || undefined
-        );
-        user = { id: createdUser.id };
-      } catch (error: any) {
-        console.error('Error creating user in getContacts:', error);
-        throw new HttpException('User not found and could not be created.', HttpStatus.NOT_FOUND);
-      }
+      throw new HttpException('User not found. Please ensure the user exists in the database.', HttpStatus.NOT_FOUND);
     }
 
     return this.contactsService.getContacts(user.id);
