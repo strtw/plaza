@@ -3,6 +3,7 @@ import { View, Text, Modal, Pressable, StyleSheet, ActivityIndicator } from 'rea
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '../lib/api';
 import { useRouter } from 'expo-router';
+import { getFullName } from '../lib/types';
 
 interface InviteDetectedModalProps {
   visible: boolean;
@@ -77,7 +78,7 @@ export function InviteDetectedModal({ visible, inviteCode, onClose, onAccept }: 
             <>
               <Text style={styles.title}>Invite Detected!</Text>
               <Text style={styles.subtitle}>
-                {invite.inviter.name || invite.inviter.email} invited you to connect.
+                {getFullName(invite.inviter)} invited you to connect.
               </Text>
 
               <View style={styles.buttonContainer}>

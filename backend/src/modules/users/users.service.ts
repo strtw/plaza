@@ -34,12 +34,21 @@ export class UsersService {
   /**
    * Create user account with firstName and lastName
    * Used during sign-up after phone verification
+   * If user already exists (e.g., from a previous failed attempt), updates their firstName and lastName
    */
   async createAccount(clerkId: string, phone: string, firstName: string, lastName: string, email?: string) {
     const phoneHash = hashPhone(phone);
     
-    return prisma.user.create({
-      data: {
+    // Use upsert to handle case where user already exists (from previous failed attempt)
+    return prisma.user.upsert({
+      where: { clerkId },
+      update: {
+        phoneHash, // Update phone hash in case it changed
+        firstName,
+        lastName,
+        email: email || undefined, // Only update email if provided
+      },
+      create: {
         clerkId,
         phoneHash,
         email,

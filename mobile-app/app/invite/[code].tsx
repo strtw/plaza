@@ -2,6 +2,7 @@ import { View, Text, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '../../lib/api';
+import { getFullName } from '../../lib/types';
 
 export default function InviteScreen() {
   const { code } = useLocalSearchParams();
@@ -41,7 +42,7 @@ export default function InviteScreen() {
   return (
     <View style={{ flex: 1, justifyContent: 'center', padding: 20 }}>
       <Text style={{ fontSize: 24, textAlign: 'center', marginBottom: 20 }}>
-        {invite.inviter.name || invite.inviter.email} invited you!
+        {getFullName(invite.inviter)} invited you!
       </Text>
 
       <Pressable

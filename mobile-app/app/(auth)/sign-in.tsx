@@ -26,6 +26,7 @@ export default function SignInScreen() {
     return phone.startsWith('+') ? phone : `+1${digits}`;
   };
 
+
   const onSignInPress = async () => {
     if (!isLoaded) {
       setError('Clerk is not loaded yet. Please wait...');
@@ -101,6 +102,8 @@ export default function SignInScreen() {
         await setActive({ session: completeSignIn.createdSessionId });
 
         // Create user in Plaza database if they don't exist
+        // This must complete before redirecting to prevent 404 errors
+        // The API will handle waiting for the token
         try {
           const api = createApi(getToken);
           await api.getOrCreateMe();

@@ -1,5 +1,5 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Contact, AvailabilityStatus } from '../lib/types';
+import { Contact, AvailabilityStatus, getFullName } from '../lib/types';
 import { useRouter } from 'expo-router';
 
 interface Props {
@@ -25,26 +25,26 @@ export function ContactListItem({ contact }: Props) {
 
   // Get initials for avatar
   const getInitials = () => {
-    const name = contact.name || contact.email || '?';
-    const parts = name.trim().split(/\s+/);
+    const fullName = getFullName(contact);
+    const parts = fullName.trim().split(/\s+/);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
-    return name.substring(0, 2).toUpperCase();
+    return fullName.substring(0, 2).toUpperCase();
   };
 
   // Get avatar background color based on name
   const getAvatarColor = () => {
-    const name = contact.name || contact.email || '';
+    const fullName = getFullName(contact);
     const colors = [
       '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
       '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52BE80'
     ];
-    const index = name.charCodeAt(0) % colors.length;
+    const index = fullName.charCodeAt(0) % colors.length;
     return colors[index];
   };
 
-  const displayName = contact.name || contact.email || 'Unknown';
+  const displayName = getFullName(contact);
   const displaySubtext = contact.status?.message || contact.phone || 'No status';
 
   return (

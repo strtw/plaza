@@ -257,6 +257,32 @@ export default function SignUpScreen() {
         } else {
           setError('Sign-up verification complete but unable to finish. Please check Clerk configuration.');
         }
+      } else if (err?.errors?.[0]?.code === 'session_exists' || err?.message?.includes('session') || err?.message?.includes('already')) {
+        // Handle "session exists" error - user might already be signed up
+        console.log('Session already exists, checking if we can proceed...');
+        
+        // Check if sign-up is complete
+        if (signUp.status === 'complete') {
+          const sessionId = signUp.createdSessionId;
+          if (sessionId) {
+            // Try to activate and create account
+            try {
+              await setActive({ session: sessionId });
+              const api = createApi(getToken);
+              await api.createAccount(firstName.trim(), lastName.trim());
+              console.log('Account created after session exists error');
+              router.replace('/(tabs)');
+              return;
+            } catch (error: any) {
+              // If account creation fails, user might already exist - try to navigate anyway
+              console.log('Account might already exist, navigating to app...');
+              router.replace('/(tabs)');
+              return;
+            }
+          }
+        }
+        
+        setError('Your account may already exist. Please try signing in instead.');
       } else {
         console.error('Verification error:', JSON.stringify(err, null, 2));
         const errorMessage = err?.errors?.[0]?.message || err?.message || 'Invalid verification code. Please try again.';

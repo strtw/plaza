@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useApi } from '../../lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getFullName } from '../../lib/types';
 
 export default function ContactDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -13,22 +14,22 @@ export default function ContactDetailScreen() {
 
   // Get initials for avatar (reused from ContactListItem pattern)
   const getInitials = (contact: any) => {
-    const name = contact?.name || contact?.email || '?';
-    const parts = name.trim().split(/\s+/);
+    const fullName = getFullName(contact);
+    const parts = fullName.trim().split(/\s+/);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
-    return name.substring(0, 2).toUpperCase();
+    return fullName.substring(0, 2).toUpperCase();
   };
 
   // Get avatar background color based on name (reused from ContactListItem pattern)
   const getAvatarColor = (contact: any) => {
-    const name = contact?.name || contact?.email || '';
+    const fullName = getFullName(contact);
     const colors = [
       '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
       '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52BE80'
     ];
-    const index = name.charCodeAt(0) % colors.length;
+    const index = fullName.charCodeAt(0) % colors.length;
     return colors[index];
   };
 
@@ -53,7 +54,7 @@ export default function ContactDetailScreen() {
     );
   }
 
-  const displayName = contact.name || contact.email || 'Unknown';
+  const displayName = getFullName(contact);
 
   return (
     <View style={{ flex: 1 }}>
