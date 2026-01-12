@@ -403,7 +403,7 @@ function ActivityScreenContent() {
           </View>
           <TextInput
             style={styles.statusInput}
-            placeholder="What's your status?"
+            placeholder="Whatcha up to?"
             placeholderTextColor="#333"
             editable={false}
             pointerEvents="none"
@@ -474,7 +474,7 @@ function ActivityScreenContent() {
               <TextInput
                 value={message}
                 onChangeText={setMessage}
-                placeholder="What's your status?"
+                placeholder="Whatcha up to?"
                 placeholderTextColor="#333"
                 style={[
                   styles.messageInput,
