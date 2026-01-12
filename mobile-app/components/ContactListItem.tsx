@@ -14,8 +14,6 @@ export function ContactListItem({ contact }: Props) {
     switch (contact.status.status) {
       case AvailabilityStatus.AVAILABLE:
         return '#25D366'; // WhatsApp green
-      case AvailabilityStatus.QUESTIONABLE:
-        return '#FFB800'; // Yellow/Orange
       case AvailabilityStatus.UNAVAILABLE:
         return '#F44336'; // Red
       default:

@@ -1,7 +1,12 @@
 export enum AvailabilityStatus {
   AVAILABLE = 'AVAILABLE',
-  QUESTIONABLE = 'QUESTIONABLE',
   UNAVAILABLE = 'UNAVAILABLE',
+}
+
+export enum StatusLocation {
+  HOME = 'HOME',
+  GREENSPACE = 'GREENSPACE',
+  THIRD_PLACE = 'THIRD_PLACE',
 }
 
 export interface User {
@@ -36,6 +41,7 @@ export interface ContactStatus {
   id: string;
   status: AvailabilityStatus;
   message?: string;
+  location?: StatusLocation;
   startTime: string;
   endTime: string;
 }
@@ -43,6 +49,7 @@ export interface ContactStatus {
 export interface CreateStatusInput {
   status: AvailabilityStatus;
   message?: string;
+  location?: StatusLocation;
   startTime: string;
   endTime: string;
 }

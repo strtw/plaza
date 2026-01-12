@@ -2,8 +2,13 @@ import { IsEnum, IsString, IsOptional, IsISO8601 } from 'class-validator';
 
 export enum AvailabilityStatus {
   AVAILABLE = 'AVAILABLE',
-  QUESTIONABLE = 'QUESTIONABLE',
   UNAVAILABLE = 'UNAVAILABLE',
+}
+
+export enum StatusLocation {
+  HOME = 'HOME',
+  GREENSPACE = 'GREENSPACE',
+  THIRD_PLACE = 'THIRD_PLACE',
 }
 
 export class CreateStatusDto {
@@ -13,6 +18,10 @@ export class CreateStatusDto {
   @IsOptional()
   @IsString()
   message?: string;
+
+  @IsOptional()
+  @IsEnum(StatusLocation)
+  location?: StatusLocation;
 
   @IsISO8601()
   startTime: string;

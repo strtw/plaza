@@ -57,6 +57,7 @@ model Status {
   userId    String
   status    AvailabilityStatus
   message   String?
+  location  StatusLocation?
   startTime DateTime
   endTime   DateTime
   createdAt DateTime           @default(now())
@@ -70,8 +71,13 @@ model Status {
 
 enum AvailabilityStatus {
   AVAILABLE // Green
-  QUESTIONABLE // Yellow
   UNAVAILABLE // Red
+}
+
+enum StatusLocation {
+  HOME
+  GREENSPACE
+  THIRD_PLACE
 }
 
 model Invite {

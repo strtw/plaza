@@ -9,7 +9,6 @@ interface Props {
 export function StatusPicker({ value, onChange }: Props) {
   const statuses = [
     { value: AvailabilityStatus.AVAILABLE, label: 'Available', color: 'green' },
-    { value: AvailabilityStatus.QUESTIONABLE, label: 'Maybe', color: 'yellow' },
     { value: AvailabilityStatus.UNAVAILABLE, label: 'Unavailable', color: 'red' },
   ];
 

@@ -102,9 +102,17 @@ function ActivityScreenContent() {
       return;
     }
     
+    // Map frontend location format to backend enum
+    const locationMap: Record<'home' | 'greenspace' | 'third-place', string> = {
+      'home': 'HOME',
+      'greenspace': 'GREENSPACE',
+      'third-place': 'THIRD_PLACE',
+    };
+    
     createStatusMutation.mutate({
       status: AvailabilityStatus.AVAILABLE,
       message: message.trim(),
+      location: locationMap[location] as any,
       startTime: new Date().toISOString(), // Current time
       endTime: endTime.toISOString(),
     });

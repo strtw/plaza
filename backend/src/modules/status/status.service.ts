@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, AvailabilityStatus, ContactStatus } from '@prisma/client';
+import { PrismaClient, AvailabilityStatus, ContactStatus, StatusLocation } from '@prisma/client';
 import { CreateStatusDto } from './dto/create-status.dto';
 
 const prisma = new PrismaClient();
@@ -7,11 +7,22 @@ const prisma = new PrismaClient();
 @Injectable()
 export class StatusService {
   async createStatus(userId: string, dto: CreateStatusDto) {
+    const now = new Date();
+    
+    // Delete expired statuses for this user before creating new one
+    await prisma.status.deleteMany({
+      where: {
+        userId,
+        endTime: { lt: now },
+      },
+    });
+    
     return prisma.status.create({
       data: {
         userId,
         status: dto.status as AvailabilityStatus,
         message: dto.message,
+        location: dto.location as StatusLocation | undefined,
         startTime: new Date(dto.startTime),
         endTime: new Date(dto.endTime),
       },
