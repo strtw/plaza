@@ -1,16 +1,35 @@
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export const createApi = (getToken: () => Promise<string | null>) => {
+  // Helper to wait for token with retries
+  const waitForToken = async (maxRetries = 15, initialDelay = 800, retryDelay = 400): Promise<string> => {
+    // Initial delay to give Clerk time to activate session
+    await new Promise(resolve => setTimeout(resolve, initialDelay));
+    
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const token = await getToken();
+        if (token) {
+          return token;
+        }
+      } catch (error) {
+        // Token not ready yet, continue retrying
+      }
+      
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+    }
+    
+    throw new Error('No authentication token available after retries');
+  };
+
   const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
     if (!API_URL) {
       throw new Error('API_URL is not configured. Check your .env file.');
     }
 
-    const token = await getToken();
-    
-    if (!token) {
-      throw new Error('No authentication token available');
-    }
+    const token = await waitForToken();
     
     const url = `${API_URL}${endpoint}`;
     console.log(`[API] Making request to: ${url}`);
@@ -60,6 +79,11 @@ export const createApi = (getToken: () => Promise<string | null>) => {
 
   return {
     getOrCreateMe: () => fetchApi('/users/me'),
+    createAccount: (firstName: string, lastName: string) =>
+      fetchApi('/users/me/create', {
+        method: 'POST',
+        body: JSON.stringify({ firstName, lastName }),
+      }),
     getContacts: () => fetchApi('/contacts'),
     getContactsStatuses: () => fetchApi('/status/contacts'),
     getMyStatus: () => fetchApi('/status/me'),

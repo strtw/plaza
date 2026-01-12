@@ -8,8 +8,10 @@ export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const { getToken } = useAuth();
   const router = useRouter();
+  const [stage, setStage] = React.useState<'name' | 'phone' | 'verify'>('name');
+  const [firstName, setFirstName] = React.useState('');
+  const [lastName, setLastName] = React.useState('');
   const [phoneNumber, setPhoneNumber] = React.useState('');
-  const [pendingVerification, setPendingVerification] = React.useState(false);
   const [code, setCode] = React.useState('');
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -26,7 +28,21 @@ export default function SignUpScreen() {
     return phone.startsWith('+') ? phone : `+1${digits}`;
   };
 
-  const onSignUpPress = async () => {
+
+  const onNameContinue = () => {
+    if (!firstName.trim()) {
+      setError('Please enter your first name');
+      return;
+    }
+    if (!lastName.trim()) {
+      setError('Please enter your last name');
+      return;
+    }
+    setError('');
+    setStage('phone');
+  };
+
+  const onPhoneContinue = async () => {
     if (!isLoaded) {
       setError('Clerk is not loaded yet. Please wait...');
       return;
@@ -58,7 +74,7 @@ export default function SignUpScreen() {
       // Prepare phone code verification
       await signUp.preparePhoneNumberVerification({ strategy: 'phone_code' });
 
-      setPendingVerification(true);
+      setStage('verify');
     } catch (err: any) {
       console.error('Sign up error:', JSON.stringify(err, null, 2));
       const errorMessage = err?.errors?.[0]?.message || err?.message || 'Failed to send verification code. Please try again.';
@@ -92,24 +108,33 @@ export default function SignUpScreen() {
       console.log('Missing fields:', completeSignUp.missingFields);
 
         if (completeSignUp.status === 'complete') {
-          // Set the active session - this will trigger the auth layout to redirect
-          await setActive({ session: completeSignUp.createdSessionId });
-
-          // Create user in Plaza database if they don't exist
-          try {
-            const api = createApi(getToken);
-            await api.getOrCreateMe();
-            console.log('User created/updated in Plaza database');
-          } catch (error: any) {
-            console.error('Error creating user in Plaza database:', error);
-            // Don't block sign-up if this fails - user can still use the app
+          // Store session ID and create account directly
+          const sessionId = completeSignUp.createdSessionId;
+          if (!sessionId) {
+            setError('Session not available. Please try again.');
+            setLoading(false);
+            return;
           }
 
-          // The auth layout will automatically redirect when isSignedIn becomes true
-          // But we'll also manually navigate as a fallback
-          setTimeout(() => {
+          // Activate the session first
+          await setActive({ session: sessionId });
+
+          // Create account with firstName and lastName
+          // The API will handle waiting for the token
+          try {
+            const api = createApi(getToken);
+            await api.createAccount(firstName.trim(), lastName.trim());
+            console.log('Account created with firstName:', firstName.trim(), 'lastName:', lastName.trim());
+
+            // Navigate to app immediately after successful account creation
             router.replace('/(tabs)');
-          }, 200);
+          } catch (error: any) {
+            console.error('Error creating account:', error);
+            setError(error.message || 'Failed to create account. Please try again.');
+            setLoading(false);
+            // Don't navigate on error - keep user on sign-up screen to retry
+          }
+          return;
       } else if (completeSignUp.status === 'missing_requirements') {
         // Check what's missing and handle it
         const missingFields = completeSignUp.missingFields || [];
@@ -124,11 +149,31 @@ export default function SignUpScreen() {
             
             // After updating, check if we can complete
             // The verification code was already used, so we need to check current status
-            if (signUp.status === 'complete') {
-              await setActive({ session: signUp.createdSessionId });
-              setTimeout(() => {
+            // Use type assertion to bypass TypeScript's type narrowing
+            if ((signUp.status as string) === 'complete') {
+              const sessionId = signUp.createdSessionId;
+              if (!sessionId) {
+                setError('Session not available. Please try again.');
+                setLoading(false);
+                return;
+              }
+
+              // Activate the session and create account
+              await setActive({ session: sessionId });
+
+              try {
+                const api = createApi(getToken);
+                await api.createAccount(firstName.trim(), lastName.trim());
+                console.log('Account created with firstName:', firstName.trim(), 'lastName:', lastName.trim());
+                // Navigate immediately after successful account creation
                 router.replace('/(tabs)');
-              }, 200);
+              } catch (error: any) {
+                console.error('Error creating account:', error);
+                setError(error.message || 'Failed to create account. Please try again.');
+                setLoading(false);
+                // Don't navigate on error - keep user on sign-up screen to retry
+              }
+              return;
             } else {
               setError('Please configure Clerk dashboard: Go to User & Authentication → Username and set it to "Optional" or "Disabled"');
             }
@@ -157,20 +202,58 @@ export default function SignUpScreen() {
               console.error('Update error:', updateErr);
             }
           }
-          // Check if complete now
-          if (signUp.status === 'complete') {
-            await setActive({ session: signUp.createdSessionId });
-            setTimeout(() => {
+          // Check if complete now - use type assertion to bypass type narrowing
+          if ((signUp.status as string) === 'complete') {
+            const sessionId = signUp.createdSessionId;
+            if (!sessionId) {
+              setError('Session not available. Please try again.');
+              setLoading(false);
+              return;
+            }
+
+            // Activate the session and create account
+            await setActive({ session: sessionId });
+
+            try {
+              const api = createApi(getToken);
+              await api.createAccount(firstName.trim(), lastName.trim());
+              console.log('Account created with firstName:', firstName.trim(), 'lastName:', lastName.trim());
+              // Navigate immediately after successful account creation
               router.replace('/(tabs)');
-            }, 200);
+            } catch (error: any) {
+              console.error('Error creating account:', error);
+              setError(error.message || 'Failed to create account. Please try again.');
+              setLoading(false);
+              // Don't navigate on error - keep user on sign-up screen to retry
+            }
+            return;
           } else {
             setError('Please configure Clerk to make username optional in dashboard settings.');
           }
         } else if (signUp.status === 'complete') {
-          await setActive({ session: signUp.createdSessionId });
-          setTimeout(() => {
+          const sessionId = signUp.createdSessionId;
+          if (!sessionId) {
+            setError('Session not available. Please try again.');
+            setLoading(false);
+            return;
+          }
+
+          // Activate the session and create account
+          await setActive({ session: sessionId });
+
+          try {
+            const api = createApi(getToken);
+            await api.createAccount(firstName.trim(), lastName.trim());
+            console.log('Account created with firstName:', firstName.trim(), 'lastName:', lastName.trim());
+            // Navigate immediately after successful account creation
             router.replace('/(tabs)');
-          }, 200);
+          } catch (error: any) {
+            console.error('Error creating account:', error);
+            setError(error.message || 'Failed to create account. Please try again.');
+            setLoading(false);
+            // Don't navigate on error - keep user on sign-up screen to retry
+          }
+          return;
         } else {
           setError('Sign-up verification complete but unable to finish. Please check Clerk configuration.');
         }
@@ -184,12 +267,86 @@ export default function SignUpScreen() {
     }
   };
 
+
   return (
     <View style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#fff' }}>
-      {!pendingVerification ? (
+      {stage === 'name' ? (
+        <>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', color: '#000' }}>
+            What's your name?
+          </Text>
+          
+          <Text style={{ color: '#666', fontSize: 14, marginBottom: 20, textAlign: 'center' }}>
+            This is how others will see you on Plaza
+          </Text>
+
+          {error ? (
+            <View style={{ backgroundColor: '#fee', padding: 12, marginBottom: 10, borderRadius: 4, borderWidth: 1, borderColor: '#fcc' }}>
+              <Text style={{ color: '#c00', textAlign: 'center' }}>{error}</Text>
+            </View>
+          ) : null}
+
+          <TextInput
+            value={firstName}
+            placeholder="First Name"
+            placeholderTextColor="#999"
+            onChangeText={(text) => setFirstName(text)}
+            autoCapitalize="words"
+            autoFocus
+            style={{
+              borderWidth: 1,
+              borderColor: '#ddd',
+              backgroundColor: '#fff',
+              color: '#000',
+              padding: 12,
+              marginBottom: 10,
+              borderRadius: 4,
+              fontSize: 16,
+            }}
+          />
+
+          <TextInput
+            value={lastName}
+            placeholder="Last Name"
+            placeholderTextColor="#999"
+            onChangeText={(text) => setLastName(text)}
+            autoCapitalize="words"
+            style={{
+              borderWidth: 1,
+              borderColor: '#ddd',
+              backgroundColor: '#fff',
+              color: '#000',
+              padding: 12,
+              marginBottom: 10,
+              borderRadius: 4,
+              fontSize: 16,
+            }}
+          />
+
+          <TouchableOpacity
+            onPress={onNameContinue}
+            disabled={!firstName.trim() || !lastName.trim()}
+            style={{
+              backgroundColor: (!firstName.trim() || !lastName.trim()) ? '#999' : '#007AFF',
+              padding: 15,
+              marginBottom: 10,
+              borderRadius: 4,
+              opacity: (!firstName.trim() || !lastName.trim()) ? 0.6 : 1,
+            }}
+          >
+            <Text style={{ color: 'white', textAlign: 'center', fontWeight: '600' }}>
+              Continue
+            </Text>
+          </TouchableOpacity>
+
+          <Link href="/(auth)/sign-in" style={{ textAlign: 'center' }}>
+            <Text style={{ color: '#0066cc' }}>Already have an account? Sign in</Text>
+          </Link>
+        </>
+      ) : stage === 'phone' ? (
         <>
           <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 30, textAlign: 'center', color: '#000' }}>
-            Create Account
+            Enter Your Phone Number
           </Text>
           
           <TextInput
@@ -217,14 +374,14 @@ export default function SignUpScreen() {
           ) : null}
 
           <TouchableOpacity
-            onPress={onSignUpPress}
-            disabled={loading}
+            onPress={onPhoneContinue}
+            disabled={loading || !phoneNumber.trim()}
             style={{
-              backgroundColor: loading ? '#999' : '#007AFF',
+              backgroundColor: (loading || !phoneNumber.trim()) ? '#999' : '#007AFF',
               padding: 15,
               marginBottom: 10,
               borderRadius: 4,
-              opacity: loading ? 0.6 : 1,
+              opacity: (loading || !phoneNumber.trim()) ? 0.6 : 1,
             }}
           >
             {loading ? (
@@ -236,11 +393,17 @@ export default function SignUpScreen() {
             )}
           </TouchableOpacity>
 
-          <Link href="/(auth)/sign-in" style={{ textAlign: 'center' }}>
-            <Text style={{ color: '#0066cc' }}>Already have an account? Sign in</Text>
-          </Link>
+          <TouchableOpacity
+            onPress={() => {
+              setStage('name');
+              setError('');
+            }}
+            style={{ marginTop: 10 }}
+          >
+            <Text style={{ color: '#0066cc', textAlign: 'center' }}>Back</Text>
+          </TouchableOpacity>
         </>
-      ) : (
+      ) : stage === 'verify' ? (
         <>
           <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', color: '#000' }}>
             Verify Phone Number
@@ -293,14 +456,14 @@ export default function SignUpScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={{ color: 'white', textAlign: 'center', fontWeight: '600' }}>
-                Verify & Create Account
+                Verify
               </Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => {
-              setPendingVerification(false);
+              setStage('phone');
               setCode('');
               setError('');
             }}
@@ -309,7 +472,7 @@ export default function SignUpScreen() {
             <Text style={{ color: '#0066cc', textAlign: 'center' }}>Change phone number</Text>
           </TouchableOpacity>
         </>
-      )}
+      ) : null}
     </View>
   );
 }

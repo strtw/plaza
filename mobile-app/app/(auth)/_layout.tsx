@@ -1,9 +1,10 @@
-import { Redirect, Slot } from 'expo-router';
+import { Redirect, Slot, useSegments } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
 import { View, Text } from 'react-native';
 
 export default function AuthRoutesLayout() {
   const { isSignedIn, isLoaded } = useAuth();
+  const segments = useSegments();
 
   if (!isLoaded) {
     return (
@@ -13,7 +14,10 @@ export default function AuthRoutesLayout() {
     );
   }
 
-  if (isSignedIn) {
+  // Don't redirect if user is on sign-up screen - let it complete account creation first
+  const isOnSignUpScreen = segments.includes('sign-up');
+  
+  if (isSignedIn && !isOnSignUpScreen) {
     return <Redirect href="/(tabs)" />;
   }
 

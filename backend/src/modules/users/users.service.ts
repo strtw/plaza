@@ -10,7 +10,7 @@ export class UsersService {
    * Find or create user by Clerk ID
    * Phone number is hashed before storing
    */
-  async findOrCreateByClerkId(clerkId: string, phone: string, email?: string, name?: string) {
+  async findOrCreateByClerkId(clerkId: string, phone: string, email?: string, firstName?: string, lastName?: string) {
     const phoneHash = hashPhone(phone);
     
     return prisma.user.upsert({
@@ -18,13 +18,33 @@ export class UsersService {
       update: {
         phoneHash, // Update phone hash if phone changed
         email,
-        name,
+        firstName,
+        lastName,
       },
       create: {
         clerkId,
         phoneHash,
         email,
-        name,
+        firstName,
+        lastName,
+      },
+    });
+  }
+
+  /**
+   * Create user account with firstName and lastName
+   * Used during sign-up after phone verification
+   */
+  async createAccount(clerkId: string, phone: string, firstName: string, lastName: string, email?: string) {
+    const phoneHash = hashPhone(phone);
+    
+    return prisma.user.create({
+      data: {
+        clerkId,
+        phoneHash,
+        email,
+        firstName,
+        lastName,
       },
     });
   }
@@ -51,7 +71,8 @@ export class UsersService {
       },
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
         email: true,
         phoneHash: true,
       },
