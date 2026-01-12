@@ -7,26 +7,45 @@ const prisma = new PrismaClient();
 @Injectable()
 export class StatusService {
   async createStatus(userId: string, dto: CreateStatusDto) {
-    const now = new Date();
-    
-    // Delete expired statuses for this user before creating new one
-    await prisma.status.deleteMany({
-      where: {
-        userId,
-        endTime: { lt: now },
-      },
-    });
-    
-    return prisma.status.create({
-      data: {
+    try {
+      const now = new Date();
+      
+      console.log('[StatusService] Creating status for userId:', userId);
+      console.log('[StatusService] DTO:', JSON.stringify(dto, null, 2));
+      
+      // Delete expired statuses for this user before creating new one
+      const deletedCount = await prisma.status.deleteMany({
+        where: {
+          userId,
+          endTime: { lt: now },
+        },
+      });
+      console.log('[StatusService] Deleted', deletedCount.count, 'expired statuses');
+      
+      const statusData = {
         userId,
         status: dto.status as AvailabilityStatus,
         message: dto.message,
-        location: dto.location as StatusLocation | undefined,
+        location: dto.location as StatusLocation,
         startTime: new Date(dto.startTime),
         endTime: new Date(dto.endTime),
-      },
-    });
+      };
+      
+      console.log('[StatusService] Creating status with data:', JSON.stringify(statusData, null, 2));
+      
+      return await prisma.status.create({
+        data: statusData,
+      });
+    } catch (error: any) {
+      console.error('[StatusService] Error creating status:', error);
+      console.error('[StatusService] Error details:', {
+        message: error?.message,
+        code: error?.code,
+        meta: error?.meta,
+        stack: error?.stack,
+      });
+      throw error;
+    }
   }
 
   async getCurrentStatus(userId: string) {

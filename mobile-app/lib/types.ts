@@ -40,16 +40,16 @@ export interface Contact extends User {
 export interface ContactStatus {
   id: string;
   status: AvailabilityStatus;
-  message?: string;
-  location?: StatusLocation;
+  message: string;
+  location: StatusLocation;
   startTime: string;
   endTime: string;
 }
 
 export interface CreateStatusInput {
   status: AvailabilityStatus;
-  message?: string;
-  location?: StatusLocation;
+  message: string;
+  location: StatusLocation;
   startTime: string;
   endTime: string;
 }

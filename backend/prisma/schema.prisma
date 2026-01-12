@@ -56,8 +56,8 @@ model Status {
   id        String             @id @default(uuid())
   userId    String
   status    AvailabilityStatus
-  message   String?
-  location  StatusLocation?
+  message   String
+  location  StatusLocation
   startTime DateTime
   endTime   DateTime
   createdAt DateTime           @default(now())

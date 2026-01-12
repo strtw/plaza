@@ -109,10 +109,19 @@ function ActivityScreenContent() {
       'third-place': 'THIRD_PLACE',
     };
     
+    const locationValue = locationMap[location];
+    console.log('[Activity] Creating status with:', {
+      status: AvailabilityStatus.AVAILABLE,
+      message: message.trim(),
+      location: locationValue,
+      startTime: new Date().toISOString(),
+      endTime: endTime.toISOString(),
+    });
+    
     createStatusMutation.mutate({
       status: AvailabilityStatus.AVAILABLE,
       message: message.trim(),
-      location: locationMap[location] as any,
+      location: locationValue,
       startTime: new Date().toISOString(), // Current time
       endTime: endTime.toISOString(),
     });

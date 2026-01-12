@@ -1,4 +1,4 @@
-import { IsEnum, IsString, IsOptional, IsISO8601 } from 'class-validator';
+import { IsEnum, IsString, IsISO8601 } from 'class-validator';
 
 export enum AvailabilityStatus {
   AVAILABLE = 'AVAILABLE',
@@ -15,13 +15,11 @@ export class CreateStatusDto {
   @IsEnum(AvailabilityStatus)
   status: AvailabilityStatus;
 
-  @IsOptional()
   @IsString()
-  message?: string;
+  message: string;
 
-  @IsOptional()
   @IsEnum(StatusLocation)
-  location?: StatusLocation;
+  location: StatusLocation;
 
   @IsISO8601()
   startTime: string;
