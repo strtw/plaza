@@ -75,7 +75,14 @@ function ActivityScreenContent() {
 
   const { data: currentStatus } = useQuery({
     queryKey: ['my-status'],
-    queryFn: api.getMyStatus,
+    queryFn: async () => {
+      const result = await api.getMyStatus();
+      // Filter out expired or expiring soon statuses to prevent showing "Expired"
+      if (isStatusExpiredOrExpiringSoon(result)) {
+        return null; // Don't update FE with expiring/expired status
+      }
+      return result;
+    },
     enabled: isLoaded && isSignedIn,
     refetchInterval: 10000, // Poll every 10 seconds
   });
@@ -88,12 +95,34 @@ function ActivityScreenContent() {
 
   // Sync API response to store
   useEffect(() => {
-    if (currentStatus) {
+    if (currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)) {
       setCurrentStatus(currentStatus);
     } else {
-      setCurrentStatus(null);
+      setCurrentStatus(null); // Clear if expired or expiring soon
     }
   }, [currentStatus, setCurrentStatus]);
+
+  // Timer effect to clear expired status immediately (checks every 10 seconds)
+  useEffect(() => {
+    if (!storeStatus || !storeStatus.endTime) return;
+    
+    const checkExpiration = () => {
+      const now = new Date(); // Use new Date() directly, not currentTime state
+      const end = new Date(storeStatus.endTime);
+      if (end.getTime() <= now.getTime()) {
+        // Clear from both store and query cache
+        setCurrentStatus(null);
+        queryClient.setQueryData(['my-status'], null);
+      }
+    };
+    
+    // Check immediately
+    checkExpiration();
+    
+    // Then check every 10 seconds (more frequent than currentTime updates)
+    const interval = setInterval(checkExpiration, 10000);
+    return () => clearInterval(interval);
+  }, [storeStatus, setCurrentStatus, queryClient]);
 
   const createStatusMutation = useMutation({
     mutationFn: api.createStatus,
@@ -212,13 +241,23 @@ function ActivityScreenContent() {
     return () => clearInterval(interval);
   }, []);
 
+  // Helper function to check if status is expired or expiring soon (< 1 minute)
+  const isStatusExpiredOrExpiringSoon = (status: ContactStatus | null): boolean => {
+    if (!status || !status.endTime) return true;
+    const end = new Date(status.endTime);
+    const now = new Date();
+    const diffMs = end.getTime() - now.getTime();
+    return diffMs <= 60000; // Less than 1 minute
+  };
+
   const getTimeRemaining = (endTime: string): string => {
     const end = new Date(endTime);
-    const now = currentTime;
+    const now = new Date(); // Use new Date() directly for accuracy
     const diffMs = end.getTime() - now.getTime();
 
+    // Guard clause: if expired, return empty string (defense-in-depth)
     if (diffMs <= 0) {
-      return 'Expired';
+      return '';
     }
 
     const diffMinutes = Math.floor(diffMs / 60000);
@@ -369,7 +408,7 @@ function ActivityScreenContent() {
             editable={false}
             pointerEvents="none"
             value={
-              currentStatus?.message
+              currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)
                 ? `${currentStatus.message}...for ${getTimeRemaining(currentStatus.endTime)}`
                 : ''
             }
