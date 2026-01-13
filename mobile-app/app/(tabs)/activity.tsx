@@ -4,7 +4,7 @@ import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
 import { AvailabilityStatus, StatusLocation, ContactStatus, getFullName } from '../../lib/types';
 import { useAuth } from '@clerk/clerk-expo';
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +48,7 @@ function ActivityScreenContent() {
   const api = createApi(getToken);
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { currentStatus: storeStatus, setCurrentStatus } = useUserStore();
 
   // Modal state
@@ -431,9 +432,18 @@ function ActivityScreenContent() {
         }
         ListEmptyComponent={
           <View style={{ padding: 20, alignItems: 'center' }}>
-            <Text style={{ fontSize: 16, color: '#666', textAlign: 'center' }}>
-              No contacts are currently active.
+            <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>
+              No contacts are sharing their status,   <Pressable
+              onPress={() => {
+                router.push('/(tabs)/contacts?openInvite=true');
+              }}
+            >
+              <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '600' }}>
+                invite more
+              </Text>
+            </Pressable> to increase your chances of hanging with them, or set yours so they see what you are up to
             </Text>
+          
           </View>
         }
       />

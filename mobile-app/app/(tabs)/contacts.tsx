@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
 import { useAuth } from '@clerk/clerk-expo';
-import { Redirect } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState, useRef } from 'react';
 import * as Contacts from 'expo-contacts';
 import * as Clipboard from 'expo-clipboard';
@@ -16,6 +16,8 @@ function HomeScreenContent() {
   const api = createApi(getToken);
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const params = useLocalSearchParams();
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [deviceContacts, setDeviceContacts] = useState<Array<{ name: string; phone: string }>>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
@@ -25,6 +27,7 @@ function HomeScreenContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [contactsInPlaza, setContactsInPlaza] = useState<Set<string>>(new Set()); // Track which phone numbers are Plaza users
   const appState = useRef(AppState.currentState);
+  const hasHandledOpenInvite = useRef(false); // Track if we've already handled the openInvite param
 
   // All hooks must be called before any conditional returns
   const { data: contacts, isLoading, refetch } = useQuery({
@@ -242,6 +245,31 @@ function HomeScreenContent() {
     }
   };
 
+  // Helper function to close modal and remove query param
+  const handleCloseModal = () => {
+    setShowSyncModal(false);
+    // Remove query param from URL when modal closes
+    const openInvite = params.openInvite;
+    const hasOpenInvite = openInvite === 'true' || (Array.isArray(openInvite) && openInvite.includes('true'));
+    if (hasOpenInvite) {
+      router.replace('/(tabs)/contacts');
+    }
+    // Reset the ref so "invite more" can work again if clicked
+    hasHandledOpenInvite.current = false;
+  };
+
+  // Auto-open invite modal when openInvite query param is present (only once)
+  useEffect(() => {
+    const openInvite = params.openInvite;
+    // Handle both string and array cases (expo-router can return arrays)
+    const shouldOpen = openInvite === 'true' || (Array.isArray(openInvite) && openInvite.includes('true'));
+    
+    if (shouldOpen && !showSyncModal && !hasHandledOpenInvite.current) {
+      setShowSyncModal(true);
+      hasHandledOpenInvite.current = true; // Mark as handled so it doesn't reopen
+    }
+  }, [params.openInvite, showSyncModal]);
+
   // Automatically request permission and load contacts when modal opens
   useEffect(() => {
     if (showSyncModal) {
@@ -337,11 +365,11 @@ function HomeScreenContent() {
         visible={showSyncModal}
         animationType="slide"
         presentationStyle="fullScreen"
-        onRequestClose={() => setShowSyncModal(false)}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Pressable onPress={() => setShowSyncModal(false)}>
+            <Pressable onPress={handleCloseModal}>
               <Text style={styles.modalCloseButton}>Close</Text>
             </Pressable>
             <View style={styles.headerButtons}>
@@ -438,9 +466,9 @@ function HomeScreenContent() {
                       [{ 
                         text: 'OK', 
                         onPress: () => {
-                          setShowSyncModal(false);
                           // Clear selected contacts
                           setSelectedContacts(new Set());
+                          handleCloseModal();
                         }
                       }]
                     );
