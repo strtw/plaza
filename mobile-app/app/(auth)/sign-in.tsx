@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Text, TextInput, TouchableOpacity, View, ActivityIndicator, Keyboard, ScrollView, Pressable } from 'react-native';
 import { useSignIn, useAuth } from '@clerk/clerk-expo';
 import { Link, useRouter } from 'expo-router';
 import { createApi } from '../../lib/api';
@@ -69,6 +69,8 @@ export default function SignInScreen() {
       console.error('Sign in error:', JSON.stringify(err, null, 2));
       const errorMessage = err?.errors?.[0]?.message || err?.message || 'Failed to send verification code. Please try again.';
       setError(errorMessage);
+      // Dismiss keyboard when error occurs so user can see the sign up link
+      Keyboard.dismiss();
     } finally {
       setLoading(false);
     }
@@ -131,62 +133,72 @@ export default function SignInScreen() {
   };
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#fff' }}>
-      {!pendingVerification ? (
-        <>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 30, textAlign: 'center', color: '#000' }}>
-            Sign In
-          </Text>
-          
-          <TextInput
-            value={phoneNumber}
-            placeholder="Phone Number (e.g., +1234567890)"
-            placeholderTextColor="#999"
-            onChangeText={(phone) => setPhoneNumber(phone)}
-            keyboardType="phone-pad"
-            autoComplete="tel"
-            style={{
-              borderWidth: 1,
-              borderColor: '#ddd',
-              backgroundColor: '#fff',
-              color: '#000',
-              padding: 12,
-              marginBottom: 10,
-              borderRadius: 4,
-            }}
-          />
+    <Pressable 
+      style={{ flex: 1, backgroundColor: '#fff' }}
+      onPress={Keyboard.dismiss}
+    >
+      <ScrollView 
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {!pendingVerification ? (
+          <>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 30, textAlign: 'center', color: '#000' }}>
+              Sign In
+            </Text>
+            
+            <TextInput
+              value={phoneNumber}
+              placeholder="Phone Number (e.g., +1234567890)"
+              placeholderTextColor="#999"
+              onChangeText={(phone) => setPhoneNumber(phone)}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              style={{
+                borderWidth: 1,
+                borderColor: '#ddd',
+                backgroundColor: '#fff',
+                color: '#000',
+                padding: 12,
+                marginBottom: 10,
+                borderRadius: 4,
+              }}
+            />
 
-          {error ? (
-            <View style={{ backgroundColor: '#fee', padding: 12, marginBottom: 10, borderRadius: 4, borderWidth: 1, borderColor: '#fcc' }}>
-              <Text style={{ color: '#c00', textAlign: 'center' }}>{error}</Text>
-            </View>
-          ) : null}
+            {error ? (
+              <Pressable 
+                onPress={Keyboard.dismiss}
+                style={{ backgroundColor: '#fee', padding: 12, marginBottom: 10, borderRadius: 4, borderWidth: 1, borderColor: '#fcc' }}
+              >
+                <Text style={{ color: '#c00', textAlign: 'center' }}>{error}</Text>
+              </Pressable>
+            ) : null}
 
-          <TouchableOpacity
-            onPress={onSignInPress}
-            disabled={loading}
-            style={{
-              backgroundColor: loading ? '#999' : '#007AFF',
-              padding: 15,
-              borderRadius: 4,
-              opacity: loading ? 0.6 : 1,
-              marginBottom: 10,
-            }}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={{ color: 'white', textAlign: 'center', fontWeight: '600' }}>
-                Send Verification Code
-              </Text>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onSignInPress}
+              disabled={loading}
+              style={{
+                backgroundColor: loading ? '#999' : '#007AFF',
+                padding: 15,
+                borderRadius: 4,
+                opacity: loading ? 0.6 : 1,
+                marginBottom: 10,
+              }}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: 'white', textAlign: 'center', fontWeight: '600' }}>
+                  Send Verification Code
+                </Text>
+              )}
+            </TouchableOpacity>
 
-          <Link href="/(auth)/sign-up" style={{ marginTop: 20, textAlign: 'center' }}>
-            <Text style={{ color: '#0066cc' }}>Don't have an account? Sign up</Text>
-          </Link>
-        </>
-      ) : (
+            <Link href="/(auth)/sign-up" style={{ marginTop: 20, textAlign: 'center' }}>
+              <Text style={{ color: '#0066cc' }}>Don't have an account? Sign up</Text>
+            </Link>
+          </>
+        ) : (
         <>
           <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', color: '#000' }}>
             Verify Phone Number
@@ -255,7 +267,8 @@ export default function SignInScreen() {
             <Text style={{ color: '#0066cc', textAlign: 'center' }}>Change phone number</Text>
           </TouchableOpacity>
         </>
-      )}
-    </View>
+        )}
+      </ScrollView>
+    </Pressable>
   );
 }

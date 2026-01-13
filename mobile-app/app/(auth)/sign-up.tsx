@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Text, TextInput, TouchableOpacity, View, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useSignUp, useAuth } from '@clerk/clerk-expo';
 import { Link, useRouter } from 'expo-router';
 import { createApi } from '../../lib/api';
@@ -295,15 +295,23 @@ export default function SignUpScreen() {
 
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: '#fff' }}>
-      {stage === 'name' ? (
+    <KeyboardAvoidingView 
+      style={{ flex: 1, backgroundColor: '#fff' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <ScrollView 
+        contentContainerStyle={{ flexGrow: 1, padding: 20, paddingTop: 115 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {stage === 'name' ? (
         <>
           <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center', color: '#000' }}>
             What's your name?
           </Text>
           
           <Text style={{ color: '#666', fontSize: 14, marginBottom: 20, textAlign: 'center' }}>
-            This is how others will see you on Plaza
+            This is how your friends will know you on Plaza
           </Text>
 
           {error ? (
@@ -365,11 +373,11 @@ export default function SignUpScreen() {
             </Text>
           </TouchableOpacity>
 
-          <Link href="/(auth)/sign-in" style={{ textAlign: 'center' }}>
-            <Text style={{ color: '#0066cc' }}>Already have an account? Sign in</Text>
-          </Link>
-        </>
-      ) : stage === 'phone' ? (
+            <Link href="/(auth)/sign-in" style={{ textAlign: 'center', marginTop: 20 }}>
+              <Text style={{ color: '#0066cc' }}>Already have an account? Sign in</Text>
+            </Link>
+          </>
+        ) : stage === 'phone' ? (
         <>
           <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 30, textAlign: 'center', color: '#000' }}>
             Enter Your Phone Number
@@ -498,8 +506,9 @@ export default function SignUpScreen() {
             <Text style={{ color: '#0066cc', textAlign: 'center' }}>Change phone number</Text>
           </TouchableOpacity>
         </>
-      ) : null}
-    </View>
+        ) : null}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
