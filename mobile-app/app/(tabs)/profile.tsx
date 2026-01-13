@@ -1,219 +1,302 @@
-import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, Share } from 'react-native';
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
-import { StatusPicker } from '../../components/StatusPicker';
-import { TimeWindowPicker } from '../../components/TimeWindowPicker';
 import { SignOutButton } from '../../components/SignOutButton';
-import { AvailabilityStatus } from '../../lib/types';
-import { useRouter, Redirect } from 'expo-router';
-import * as Clipboard from 'expo-clipboard';
+import { getFullName } from '../../lib/types';
+import { Redirect } from 'expo-router';
 import { useAuth } from '@clerk/clerk-expo';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const ProfileScreenContent = lazy(() => Promise.resolve({
-  default: function ProfileScreenContent() {
-    const { isSignedIn, isLoaded, getToken } = useAuth();
-    const api = createApi(getToken);
-    const queryClient = useQueryClient();
-    const router = useRouter();
+function ProfileScreenContent() {
+  const { isSignedIn, isLoaded, getToken } = useAuth();
+  const api = createApi(getToken);
+  const insets = useSafeAreaInsets();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-    // All hooks must be called before any conditional returns
-    const [status, setStatus] = useState<AvailabilityStatus>(
-      AvailabilityStatus.AVAILABLE
+  // Fetch current user data
+  const { data: currentUser } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: api.getOrCreateMe,
+    enabled: isLoaded && isSignedIn,
+  });
+
+  // Avatar helper functions
+  const getInitials = () => {
+    if (!currentUser) return '?';
+    const fullName = getFullName(currentUser);
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return fullName.substring(0, 2).toUpperCase();
+  };
+
+  const getAvatarColor = () => {
+    if (!currentUser) return '#E5E5E5';
+    const fullName = getFullName(currentUser);
+    const colors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+      '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52BE80'
+    ];
+    const index = fullName.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
+  if (!isLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
+        <Text>Loading...</Text>
+      </View>
     );
-    const [message, setMessage] = useState('');
-    const [startTime, setStartTime] = useState(new Date());
-    const [endTime, setEndTime] = useState(() => {
-      const end = new Date();
-      end.setHours(end.getHours() + 2);
-      return end;
-    });
+  }
 
-    const { data: currentStatus } = useQuery({
-      queryKey: ['my-status'],
-      queryFn: api.getMyStatus,
-      enabled: isLoaded && isSignedIn,
-    });
+  if (!isSignedIn) {
+    return <Redirect href="/(auth)/sign-in" />;
+  }
 
-    const createStatusMutation = useMutation({
-      mutationFn: api.createStatus,
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['my-status'] });
-        queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
-      },
-    });
-
-    // Now we can do conditional returns after all hooks
-    if (!isLoaded) {
-      return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
-          <Text>Loading...</Text>
-        </View>
-      );
-    }
-
-    if (!isSignedIn) {
-      return <Redirect href="/(auth)/sign-in" />;
-    }
-
-  // Generate a dummy invite code for now (32 character hex string)
-  const generateDummyInviteCode = () => {
-    const chars = '0123456789abcdef';
-    let code = '';
-    for (let i = 0; i < 32; i++) {
-      code += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return code;
-  };
-
-  const handleInvite = async () => {
-    try {
-      // Generate dummy invite code for now
-      const inviteCode = generateDummyInviteCode();
-      console.log('Generated invite code:', inviteCode);
-      
-      // Copy invite code to clipboard
-      await Clipboard.setStringAsync(inviteCode);
-      console.log('Copied to clipboard:', inviteCode);
-      
-      // Create share message with App Store link and invite code
-      // TODO: Replace with your actual App Store URL once published
-      const appStoreUrl = 'https://apps.apple.com/app/id/YOUR_APP_ID'; // Replace with real URL
-      const shareMessage = `Join me on Plaza! Download here: ${appStoreUrl}\n\nInvite code: ${inviteCode}`;
-      
-      // Use React Native's built-in Share API to open iOS share sheet
-      const result = await Share.share({
-        message: shareMessage,
-        title: 'Invite someone to Plaza',
-      });
-      
-      console.log('Share result:', result);
-      
-      // Show success message
-      if (result.action === Share.sharedAction) {
-        Alert.alert('Success', 'Invite shared!');
-      }
-    } catch (error: any) {
-      console.error('Error sharing:', error);
-      
-      // If Share.share fails, show alert with the message
-      const inviteCode = generateDummyInviteCode();
-      await Clipboard.setStringAsync(inviteCode);
-      const appStoreUrl = 'https://apps.apple.com/app/id/YOUR_APP_ID';
-      const shareMessage = `Join me on Plaza! Download here: ${appStoreUrl}\n\nInvite code: ${inviteCode}`;
-      
-      Alert.alert(
-        'Invite Code Generated',
-        `Share this message:\n\n${shareMessage}\n\n(Invite code copied to clipboard)`,
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
-  const handleSaveStatus = () => {
-    createStatusMutation.mutate({
-      status,
-      message,
-      startTime: startTime.toISOString(),
-      endTime: endTime.toISOString(),
-    });
-  };
+  const isDeleteEnabled = deleteConfirmText === 'DELETE';
 
   return (
-    <ScrollView style={{ flex: 1, padding: 20, backgroundColor: '#f5f5f5' }}>
-      <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>
-        Set Your Status
-      </Text>
-
-      {currentStatus && (
-        <View style={{ marginBottom: 20, padding: 10, backgroundColor: '#f0f0f0' }}>
-          <Text>Current: {currentStatus.status}</Text>
-          {currentStatus.message && <Text>{currentStatus.message}</Text>}
+    <View style={styles.container}>
+      <View style={styles.content}>
+        {/* Avatar */}
+        <View style={styles.avatarContainer}>
+          <View style={[styles.avatar, { backgroundColor: getAvatarColor() }]}>
+            <Text style={styles.avatarText}>{getInitials()}</Text>
+          </View>
         </View>
-      )}
 
-      <StatusPicker value={status} onChange={setStatus} />
+        {/* Name */}
+        <Text style={styles.nameText}>
+          {currentUser ? getFullName(currentUser) : 'Loading...'}
+        </Text>
 
-      <View style={{ marginVertical: 20 }}>
-        <Text style={{ marginBottom: 5 }}>Status Message (Optional)</Text>
-        <TextInput
-          value={message}
-          onChangeText={setMessage}
-          placeholder="e.g., Free for coffee"
-          style={{ borderWidth: 1, padding: 10 }}
-        />
+        {/* Sign Out Button */}
+        <SignOutButton />
       </View>
 
-      <TimeWindowPicker
-        startTime={startTime}
-        endTime={endTime}
-        onStartTimeChange={setStartTime}
-        onEndTimeChange={setEndTime}
-      />
+      {/* Delete Account Button - Fixed at bottom */}
+      <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 10, paddingTop: 20 }]}>
+        <Pressable
+          style={styles.deleteAccountButton}
+          onPress={() => {
+            setShowDeleteModal(true);
+          }}
+        >
+          <Text style={styles.deleteAccountText}>Delete Account</Text>
+        </Pressable>
+      </View>
 
-      <Pressable
-        onPress={handleSaveStatus}
-        style={{
-          backgroundColor: 'blue',
-          padding: 15,
-          marginTop: 20,
-          borderRadius: 5,
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setShowDeleteModal(false);
+          setDeleteConfirmText('');
         }}
       >
-        <Text style={{ color: 'white', textAlign: 'center', fontSize: 16 }}>
-          Save Status
-        </Text>
-      </Pressable>
+        <View style={[styles.modalContainer, { paddingTop: insets.top + 16 }]}>
+          <View style={styles.modalHeader}>
+            <Pressable
+              onPress={() => {
+                setShowDeleteModal(false);
+                setDeleteConfirmText('');
+              }}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={28} color="#000" />
+            </Pressable>
+            <Text style={styles.modalTitle}>Delete Account</Text>
+            <View style={styles.closeButton} />
+          </View>
 
-      <Pressable
-        onPress={handleInvite}
-        style={{
-          backgroundColor: 'green',
-          padding: 15,
-          marginTop: 10,
-          borderRadius: 5,
-        }}
-      >
-        <Text style={{ color: 'white', textAlign: 'center', fontSize: 16 }}>
-          Invite Someone
-        </Text>
-      </Pressable>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalWarningText}>
+              Are you sure? This action cannot be undone. Type "DELETE" to continue.
+            </Text>
 
-      <SignOutButton />
-    </ScrollView>
+            <TextInput
+              value={deleteConfirmText}
+              onChangeText={setDeleteConfirmText}
+              placeholder="Type DELETE"
+              placeholderTextColor="#999"
+              style={styles.deleteInput}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+
+            <Pressable
+              style={[
+                styles.deleteButton,
+                !isDeleteEnabled && styles.deleteButtonDisabled
+              ]}
+              onPress={() => {
+                // TODO: Wire up delete account functionality
+                if (isDeleteEnabled) {
+                  // Handle delete account
+                }
+              }}
+              disabled={!isDeleteEnabled}
+            >
+              <Text style={[
+                styles.deleteButtonText,
+                !isDeleteEnabled && styles.deleteButtonTextDisabled
+              ]}>
+                Delete
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
-  }
-}));
+}
 
 export default function ProfileScreen() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Ensure component only mounts after ClerkProvider is ready
-    const timer = setTimeout(() => {
-      setMounted(true);
-    }, 1000);
-    return () => clearTimeout(timer);
+    // Delay rendering until after mount to ensure ClerkProvider is ready
+    setMounted(true);
   }, []);
 
   if (!mounted) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
         <ActivityIndicator size="large" color="#0000ff" />
         <Text>Loading...</Text>
       </View>
     );
   }
 
-  return (
-    <Suspense fallback={
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#0000ff" />
-        <Text>Loading...</Text>
-      </View>
-    }>
-      <ProfileScreenContent />
-    </Suspense>
-  );
+  return <ProfileScreenContent />;
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  avatarContainer: {
+    marginBottom: 20,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E5E5E5',
+  },
+  avatarText: {
+    fontSize: 36,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  nameText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 40,
+  },
+  bottomContainer: {
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    backgroundColor: '#fff',
+  },
+  deleteAccountButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#FF3B30',
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    alignSelf: 'center',
+    minWidth: 200,
+  },
+  deleteAccountText: {
+    fontSize: 16,
+    color: '#FF3B30',
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    minHeight: 60,
+  },
+  closeButton: {
+    padding: 4,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000',
+    flex: 1,
+    textAlign: 'center',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  modalWarningText: {
+    fontSize: 16,
+    color: '#000',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  deleteInput: {
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#000',
+    backgroundColor: '#fff',
+    marginBottom: 24,
+  },
+  deleteButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+  },
+  deleteButtonDisabled: {
+    backgroundColor: '#e0e0e0',
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  deleteButtonTextDisabled: {
+    color: '#999',
+  },
+});
 
