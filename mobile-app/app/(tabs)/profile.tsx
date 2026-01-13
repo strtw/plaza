@@ -1,16 +1,18 @@
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { SignOutButton } from '../../components/SignOutButton';
 import { getFullName } from '../../lib/types';
-import { Redirect } from 'expo-router';
-import { useAuth } from '@clerk/clerk-expo';
+import { Redirect, useRouter } from 'expo-router';
+import { useAuth, useClerk } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function ProfileScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
+  const { signOut } = useClerk();
+  const router = useRouter();
   const api = createApi(getToken);
   const insets = useSafeAreaInsets();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -21,6 +23,31 @@ function ProfileScreenContent() {
     queryKey: ['current-user'],
     queryFn: api.getOrCreateMe,
     enabled: isLoaded && isSignedIn,
+  });
+
+  // Delete account mutation
+  const deleteAccountMutation = useMutation({
+    mutationFn: api.deleteAccount,
+    onSuccess: async () => {
+      // Close modal
+      setShowDeleteModal(false);
+      setDeleteConfirmText('');
+      
+      // Sign out from Clerk (account is already deleted, but we need to clear the session)
+      try {
+        await signOut();
+        router.replace('/(auth)/sign-in');
+      } catch (error) {
+        // Even if signOut fails, redirect to sign-in
+        router.replace('/(auth)/sign-in');
+      }
+    },
+    onError: (error: any) => {
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to delete account. Please try again.'
+      );
+    },
   });
 
   // Avatar helper functions
@@ -133,22 +160,25 @@ function ProfileScreenContent() {
             <Pressable
               style={[
                 styles.deleteButton,
-                !isDeleteEnabled && styles.deleteButtonDisabled
+                (!isDeleteEnabled || deleteAccountMutation.isPending) && styles.deleteButtonDisabled
               ]}
               onPress={() => {
-                // TODO: Wire up delete account functionality
-                if (isDeleteEnabled) {
-                  // Handle delete account
+                if (isDeleteEnabled && !deleteAccountMutation.isPending) {
+                  deleteAccountMutation.mutate();
                 }
               }}
-              disabled={!isDeleteEnabled}
+              disabled={!isDeleteEnabled || deleteAccountMutation.isPending}
             >
-              <Text style={[
-                styles.deleteButtonText,
-                !isDeleteEnabled && styles.deleteButtonTextDisabled
-              ]}>
-                Delete
-              </Text>
+              {deleteAccountMutation.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={[
+                  styles.deleteButtonText,
+                  (!isDeleteEnabled || deleteAccountMutation.isPending) && styles.deleteButtonTextDisabled
+                ]}>
+                  Delete
+                </Text>
+              )}
             </Pressable>
           </View>
         </View>

@@ -130,6 +130,10 @@ export const createApi = (getToken: () => Promise<string | null>) => {
         body: JSON.stringify({ contacts }),
       }),
     getAppContacts: () => fetchApi('/app-contacts'),
+    deleteAccount: () =>
+      fetchApi('/users/me', {
+        method: 'DELETE',
+      }),
   };
 };
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, UseGuards, Request, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Delete, UseGuards, Request, Body, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { clerkClient } from '@clerk/clerk-sdk-node';
@@ -85,6 +85,40 @@ export class UsersController {
       lastName: user.lastName,
       email: user.email,
     };
+  }
+
+  /**
+   * Delete user account
+   * Removes user from both Plaza database and Clerk
+   */
+  @Delete('me')
+  async deleteAccount(@Request() req) {
+    const clerkId = req.userId;
+
+    try {
+      // First, delete from Plaza database (cascades will handle related records)
+      await this.usersService.deleteAccount(clerkId);
+
+      // Then, delete from Clerk
+      try {
+        await clerkClient.users.deleteUser(clerkId);
+      } catch (clerkError: any) {
+        // Log but don't fail if Clerk deletion fails (user might already be deleted)
+        console.error('[UsersController] Error deleting user from Clerk:', clerkError);
+        // Continue - Plaza deletion already succeeded
+      }
+
+      return {
+        success: true,
+        message: 'Account deleted successfully',
+      };
+    } catch (error: any) {
+      console.error('[UsersController] Error deleting account:', error);
+      throw new HttpException(
+        error?.message || 'Failed to delete account',
+        error?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }
 

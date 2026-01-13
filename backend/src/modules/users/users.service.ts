@@ -87,5 +87,16 @@ export class UsersService {
       },
     });
   }
+
+  /**
+   * Delete user account from Plaza database
+   * Note: Related records (contacts, statuses, invites, appContacts) are automatically deleted
+   * due to onDelete: Cascade in the schema
+   */
+  async deleteAccount(clerkId: string) {
+    return prisma.user.delete({
+      where: { clerkId },
+    });
+  }
 }
 
