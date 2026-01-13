@@ -306,7 +306,7 @@ function HomeScreenContent() {
 
   if (!isLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
         <Text>Loading...</Text>
       </View>
     );
@@ -318,14 +318,14 @@ function HomeScreenContent() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
         <Text>Loading...</Text>
       </View>
     );
   }
   
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={[styles.headerContainer, { paddingTop: headerPaddingTop }]}>
         <Text style={styles.headerTitle}>Contacts</Text>
         <Pressable 
@@ -686,7 +686,7 @@ export default function HomeScreen() {
 
   if (!mounted) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
         <ActivityIndicator size="large" color="#0000ff" />
         <Text>Loading...</Text>
       </View>

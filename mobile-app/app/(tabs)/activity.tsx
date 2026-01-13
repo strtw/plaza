@@ -344,7 +344,7 @@ function ActivityScreenContent() {
 
   if (!isLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
         <Text>Loading...</Text>
       </View>
     );
@@ -356,14 +356,14 @@ function ActivityScreenContent() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
         <Text>Loading...</Text>
       </View>
     );
   }
   
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={[styles.headerContainer, { paddingTop: headerPaddingTop }]}>
         <Text style={styles.headerTitle}>Activity</Text>
       </View>
@@ -433,7 +433,7 @@ function ActivityScreenContent() {
         ListEmptyComponent={
           <View style={{ padding: 20, alignItems: 'center' }}>
             <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>
-              No contacts are sharing their status,   <Pressable
+              No contacts are sharing their status, for a better chance of seeing your friends here ,  <Pressable
               onPress={() => {
                 router.push('/(tabs)/contacts?openInvite=true');
               }}
@@ -441,9 +441,9 @@ function ActivityScreenContent() {
               <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '600' }}>
                 invite more
               </Text>
-            </Pressable> to increase your chances of hanging with them, or set yours so they see what you are up to
+            </Pressable> 
             </Text>
-          
+          <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>Or lead the way and set yours now</Text>
           </View>
         }
       />
@@ -638,7 +638,7 @@ export default function ActivityScreen() {
 
   if (!mounted) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
         <ActivityIndicator size="large" color="#0000ff" />
         <Text>Loading...</Text>
       </View>

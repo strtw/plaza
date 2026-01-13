@@ -46,7 +46,7 @@ const ProfileScreenContent = lazy(() => Promise.resolve({
     // Now we can do conditional returns after all hooks
     if (!isLoaded) {
       return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
           <Text>Loading...</Text>
         </View>
       );
@@ -120,7 +120,7 @@ const ProfileScreenContent = lazy(() => Promise.resolve({
   };
 
   return (
-    <ScrollView style={{ flex: 1, padding: 20 }}>
+    <ScrollView style={{ flex: 1, padding: 20, backgroundColor: '#f5f5f5' }}>
       <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>
         Set Your Status
       </Text>
