@@ -38,13 +38,11 @@ export class AppContactsService {
             },
           },
           update: {
-            name: contact.name, // Update name in case it changed
             plazaUserId: plazaUser?.id || null, // Update plazaUserId if they joined
           },
           create: {
             userId,
             phoneHash,
-            name: contact.name,
             plazaUserId: plazaUser?.id || null,
           },
         });
@@ -89,7 +87,6 @@ export class AppContactsService {
       // Transform to a unified format
       return appContacts.map((ac) => ({
         id: ac.id,
-        name: ac.name,
         phoneHash: ac.phoneHash,
         isOnPlaza: !!ac.plazaUserId,
         plazaUser: ac.plazaUser,

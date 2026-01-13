@@ -100,7 +100,6 @@ model AppContact {
   id        String   @id @default(uuid())
   userId    String   // User who selected this contact
   phoneHash String   // Hashed phone number
-  name      String   // Name from device contacts
   plazaUserId String? // If this contact is a Plaza user, link to User
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
