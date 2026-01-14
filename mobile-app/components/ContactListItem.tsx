@@ -43,7 +43,6 @@ export function ContactListItem({ contact }: Props) {
   };
 
   const displayName = getFullName(contact);
-  const displaySubtext = contact.status?.message || contact.phone || 'No status';
 
   return (
     <Pressable
@@ -65,9 +64,6 @@ export function ContactListItem({ contact }: Props) {
             {displayName}
           </Text>
         </View>
-        <Text style={styles.subtext} numberOfLines={1}>
-          {displaySubtext}
-        </Text>
       </View>
     </Pressable>
   );

@@ -14,7 +14,7 @@ export interface User {
   firstName: string | null;
   lastName: string | null;
   email: string | null;
-  phone: string;
+  phone?: string; // Optional since we don't store phone numbers in the database
 }
 
 /**

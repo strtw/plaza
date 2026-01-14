@@ -29,12 +29,19 @@ export class FriendsService {
         orderBy: { createdAt: 'desc' },
       });
 
-      return friends.map((f) => ({
+      const result = friends.map((f) => ({
         id: f.friendUser.id,
         firstName: f.friendUser.firstName,
         lastName: f.friendUser.lastName,
         email: f.friendUser.email,
       }));
+      
+      console.log('[FriendsService] Returning', result.length, 'friends');
+      if (result.length > 0) {
+        console.log('[FriendsService] Sample friend data:', JSON.stringify(result[0], null, 2));
+      }
+      
+      return result;
     } catch (error: any) {
       console.error('[FriendsService] Error fetching friends:', error);
       return [];

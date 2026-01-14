@@ -34,6 +34,12 @@ function HomeScreenContent() {
     queryKey: ['friends'],
     queryFn: api.getContacts,
     enabled: isLoaded && isSignedIn,
+    onSuccess: (data) => {
+      console.log('[Contacts] Received friends data:', data?.length || 0, 'friends');
+      if (data && data.length > 0) {
+        console.log('[Contacts] Sample friend:', JSON.stringify(data[0], null, 2));
+      }
+    },
   });
 
   const { data: statuses } = useQuery({
@@ -378,18 +384,29 @@ function HomeScreenContent() {
                  process.env.EXPO_PUBLIC_API_URL?.includes('localhost')) || 
                  __DEV__) && (
                 <Pressable
-                  style={[styles.devButton, selectedContacts.size === 0 && styles.devButtonDisabled]}
+                  style={styles.devButton}
                   onPress={async () => {
-                    const selected = deviceContacts.filter(contact => 
-                      selectedContacts.has(contact.phone)
+                    // Filter out contacts that are already Plaza users
+                    const nonPlazaContacts = deviceContacts.filter(contact => 
+                      !contactsInPlaza.has(contact.phone)
                     );
                     
-                    if (selected.length === 0) {
-                      Alert.alert('No Contacts Selected', 'Please select contacts first.');
+                    if (nonPlazaContacts.length === 0) {
+                      Alert.alert(
+                        'No Contacts Available',
+                        'All your contacts are already Plaza users, or you need to load contacts first.'
+                      );
                       return;
                     }
 
+                    // Randomly select 3-4 contacts
+                    const shuffled = [...nonPlazaContacts].sort(() => Math.random() - 0.5);
+                    const count = Math.min(3 + Math.floor(Math.random() * 2), shuffled.length); // 3 or 4
+                    const selected = shuffled.slice(0, count);
+
                     try {
+                      console.log('[Create Mock Users] Selected', selected.length, 'random contacts:', selected.map(c => c.name));
+                      
                       // Send contacts with phone and name
                       const contacts = selected.map(c => ({ phone: c.phone, name: c.name }));
                       const result = await api.createMockUsers(contacts);
@@ -399,7 +416,7 @@ function HomeScreenContent() {
                       
                       Alert.alert(
                         'Mock Users Created',
-                        `Created ${result.created} test user${result.created !== 1 ? 's' : ''}.\n\nThey will appear as existing Plaza users.`,
+                        `Created ${result.created} test user${result.created !== 1 ? 's' : ''}:\n${selected.map(c => c.name).join(', ')}\n\nThey will appear as existing Plaza users.`,
                         [{ text: 'OK' }]
                       );
                     } catch (error: any) {
@@ -411,9 +428,8 @@ function HomeScreenContent() {
                       );
                     }
                   }}
-                  disabled={selectedContacts.size === 0}
                 >
-                  <Text style={[styles.devButtonText, selectedContacts.size === 0 && styles.devButtonTextDisabled]}>
+                  <Text style={styles.devButtonText}>
                     Create Mock Users
                   </Text>
                 </Pressable>
