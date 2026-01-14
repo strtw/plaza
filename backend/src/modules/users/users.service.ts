@@ -90,7 +90,7 @@ export class UsersService {
 
   /**
    * Delete user account from Plaza database
-   * Note: Related records (contacts, statuses, invites, appContacts) are automatically deleted
+   * Note: Related records (statuses, invites, friends) are automatically deleted
    * due to onDelete: Cascade in the schema
    */
   async deleteAccount(clerkId: string) {

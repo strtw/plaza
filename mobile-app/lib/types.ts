@@ -19,6 +19,7 @@ export interface User {
 
 /**
  * Helper function to get full name from firstName and lastName
+ * Falls back to a cleaned email (without domain) or "Unknown" if no name is available
  */
 export function getFullName(user: User): string {
   if (user.firstName && user.lastName) {
@@ -30,7 +31,14 @@ export function getFullName(user: User): string {
   if (user.lastName) {
     return user.lastName;
   }
-  return user.email || 'Unknown';
+  // If no name, try to extract a readable part from email (before @)
+  if (user.email) {
+    const emailPart = user.email.split('@')[0];
+    // Remove common prefixes like "test." and make it more readable
+    const cleaned = emailPart.replace(/^test\./, '').replace(/[._]/g, ' ');
+    return cleaned || 'Unknown';
+  }
+  return 'Unknown';
 }
 
 export interface Contact extends User {

@@ -35,7 +35,7 @@ export function InviteDetectedModal({ visible, inviteCode, onClose, onAccept }: 
     mutationFn: () => api.useInvite(inviteCode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
       onAccept();
       onClose();
       router.replace('/(tabs)');

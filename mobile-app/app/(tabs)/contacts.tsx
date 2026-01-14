@@ -31,14 +31,14 @@ function HomeScreenContent() {
 
   // All hooks must be called before any conditional returns
   const { data: contacts, isLoading, refetch } = useQuery({
-    queryKey: ['contacts'],
+    queryKey: ['friends'],
     queryFn: api.getContacts,
     enabled: isLoaded && isSignedIn,
   });
 
   const { data: statuses } = useQuery({
-    queryKey: ['contacts-statuses'],
-    queryFn: api.getContactsStatuses,
+    queryKey: ['friends-statuses'],
+    queryFn: api.getFriendsStatuses,
     enabled: isLoaded && isSignedIn,
     refetchInterval: 10000, // Poll every 10 seconds
   });
@@ -53,8 +53,8 @@ function HomeScreenContent() {
     mutationFn: api.matchContacts,
     onSuccess: (data) => {
       // Refresh contacts list
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['friends'] });
+      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
       // Note: Alert is handled in the done button handler to avoid duplicate alerts
     },
     onError: (error: any) => {
@@ -344,7 +344,7 @@ function HomeScreenContent() {
             refreshing={isLoading} 
             onRefresh={() => {
               refetch();
-              queryClient.invalidateQueries({ queryKey: ['app-contacts'] });
+              queryClient.invalidateQueries({ queryKey: ['friends'] });
             }} 
           />
         }
@@ -430,33 +430,28 @@ function HomeScreenContent() {
                   }
 
                   try {
-                    // Step 1: Save selected contacts (only Plaza users can be selected)
-                    console.log('[Contact Sync] Step 1: Saving selected contacts...');
-                    await api.saveAppContacts(selected);
-                    console.log('[Contact Sync] Step 1: Saved', selected.length, 'selected contacts');
-                    
-                    // Step 2: Hash the phone numbers
-                    console.log('[Contact Sync] Step 2: Hashing phone numbers...');
+                    // Step 1: Hash the phone numbers
+                    console.log('[Contact Sync] Step 1: Hashing phone numbers...');
                     const phoneNumbers = selected.map(c => c.phone);
                     const phoneHashes = await hashPhones(phoneNumbers, api.hashPhones);
-                    console.log('[Contact Sync] Step 2: Hashed', phoneHashes.length, 'phone numbers');
+                    console.log('[Contact Sync] Step 1: Hashed', phoneHashes.length, 'phone numbers');
                     
-                    // Step 3: Match contacts (all selected contacts are Plaza users)
-                    console.log('[Contact Sync] Step 3: Matching contacts...');
+                    // Step 2: Match contacts (all selected contacts are Plaza users)
+                    // This creates Friend records directly (unidirectional)
+                    console.log('[Contact Sync] Step 2: Matching contacts...');
                     const matchResult = await matchContactsMutation.mutateAsync(phoneHashes);
-                    console.log('[Contact Sync] Step 3: Contacts matched successfully', matchResult);
+                    console.log('[Contact Sync] Step 2: Contacts matched successfully', matchResult);
                     
-                    // Step 4: Refresh contacts list immediately
+                    // Step 3: Refresh contacts list immediately
                     await Promise.all([
-                      queryClient.invalidateQueries({ queryKey: ['contacts'] }),
-                      queryClient.invalidateQueries({ queryKey: ['app-contacts'] }),
+                      queryClient.invalidateQueries({ queryKey: ['friends'] }),
                       queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] }),
                     ]);
                     
                     // Refetch contacts to ensure the list is updated
                     await refetch();
                     
-                    // Step 5: Show results and close modal
+                    // Step 4: Show results and close modal
                     const count = matchResult?.matched || selected.length;
                     const message = `Added ${count} friend${count !== 1 ? 's' : ''} on Plaza!`;
                     

@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaClient, ContactStatus } from '@prisma/client';
+import { Injectable } from '@nestjs/common';
+import { PrismaClient, FriendStatus } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { hashPhone, normalizePhone } from '../../common/utils/phone-hash.util';
 
@@ -8,88 +8,6 @@ const prisma = new PrismaClient();
 @Injectable()
 export class ContactsService {
   constructor(private readonly usersService: UsersService) {}
-  async getContacts(userId: string) {
-    try {
-      const contacts = await prisma.contact.findMany({
-        where: {
-          userId,
-          status: ContactStatus.ACTIVE,
-        },
-        include: {
-          contactUser: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-              // Note: phone number is not stored in DB (privacy-first design)
-              // Mobile app maintains phone numbers locally
-            },
-          },
-        },
-      });
-
-      return contacts.map(c => c.contactUser);
-    } catch (error) {
-      console.error('Error fetching contacts:', error);
-      return []; // Return empty array on error to prevent breaking the app
-    }
-  }
-
-  async addContact(userId: string, contactUserId: string) {
-    // Create bidirectional contact relationship
-    await prisma.$transaction([
-      prisma.contact.create({
-        data: {
-          userId,
-          contactUserId,
-          status: ContactStatus.ACTIVE,
-        },
-      }),
-      prisma.contact.create({
-        data: {
-          userId: contactUserId,
-          contactUserId: userId,
-          status: ContactStatus.ACTIVE,
-        },
-      }),
-    ]);
-
-    return { success: true };
-  }
-
-  async blockContact(userId: string, contactId: string) {
-    const contact = await prisma.contact.findFirst({
-      where: {
-        id: contactId,
-        userId,
-        status: ContactStatus.ACTIVE,
-      },
-    });
-
-    if (!contact) {
-      throw new NotFoundException('Contact not found');
-    }
-
-    // Block the contact (both directions)
-    await prisma.$transaction([
-      prisma.contact.update({
-        where: { id: contactId },
-        data: { status: ContactStatus.BLOCKED },
-      }),
-      // Also block the reverse relationship if it exists
-      prisma.contact.updateMany({
-        where: {
-          userId: contact.contactUserId,
-          contactUserId: userId,
-          status: ContactStatus.ACTIVE,
-        },
-        data: { status: ContactStatus.BLOCKED },
-      }),
-    ]);
-
-    return { success: true };
-  }
 
   /**
    * Match phone hashes against existing Plaza users and create contact relationships
@@ -124,73 +42,42 @@ export class ContactsService {
       const otherUsers = existingUsers.filter(user => user.id !== userId);
       console.log('[ContactsService] After filtering self,', otherUsers.length, 'users to add as contacts');
 
-      // Create contact relationships for matched users (bidirectional)
+      // Create friend relationships for matched users (unidirectional: userId -> contactUserId)
       for (const contactUser of otherUsers) {
         try {
-          // Check if contact relationship already exists (both directions)
-          const existingContact = await prisma.contact.findFirst({
+          // Check if friend relationship already exists
+          const existingFriend = await prisma.friend.findUnique({
             where: {
-              userId,
-              contactUserId: contactUser.id,
+              userId_friendUserId: {
+                userId,
+                friendUserId: contactUser.id,
+              },
             },
           });
 
-          const existingReverseContact = await prisma.contact.findFirst({
-            where: {
-              userId: contactUser.id,
-              contactUserId: userId,
-            },
-          });
-
-          // Create or update forward relationship (userId -> contactUserId)
-          if (!existingContact) {
+          // Create or update friend relationship (userId -> friendUserId)
+          if (!existingFriend) {
             try {
-              await prisma.contact.create({
+              await prisma.friend.create({
                 data: {
                   userId,
-                  contactUserId: contactUser.id,
-                  status: ContactStatus.ACTIVE,
+                  friendUserId: contactUser.id,
+                  status: FriendStatus.ACTIVE,
                 },
               });
             } catch (createError: any) {
-              // If it's a duplicate constraint error, contact was created between check and create (race condition)
+              // If it's a duplicate constraint error, friend was created between check and create (race condition)
               if (createError.code === 'P2002') {
-                console.log('[ContactsService] Forward contact relationship already exists (race condition), continuing...');
+                console.log('[ContactsService] Friend relationship already exists (race condition), continuing...');
               } else {
                 throw createError; // Re-throw if it's a different error
               }
             }
-          } else if (existingContact.status === ContactStatus.BLOCKED) {
+          } else if (existingFriend.status === FriendStatus.BLOCKED) {
             // Reactivate if previously blocked
-            await prisma.contact.update({
-              where: { id: existingContact.id },
-              data: { status: ContactStatus.ACTIVE },
-            });
-          }
-
-          // Create or update reverse relationship (contactUserId -> userId)
-          if (!existingReverseContact) {
-            try {
-              await prisma.contact.create({
-                data: {
-                  userId: contactUser.id,
-                  contactUserId: userId,
-                  status: ContactStatus.ACTIVE,
-                },
-              });
-            } catch (createError: any) {
-              // If it's a duplicate constraint error, contact was created between check and create (race condition)
-              if (createError.code === 'P2002') {
-                console.log('[ContactsService] Reverse contact relationship already exists (race condition), continuing...');
-              } else {
-                throw createError; // Re-throw if it's a different error
-              }
-            }
-          } else if (existingReverseContact.status === ContactStatus.BLOCKED) {
-            // Reactivate if previously blocked
-            await prisma.contact.update({
-              where: { id: existingReverseContact.id },
-              data: { status: ContactStatus.ACTIVE },
+            await prisma.friend.update({
+              where: { id: existingFriend.id },
+              data: { status: FriendStatus.ACTIVE },
             });
           }
 

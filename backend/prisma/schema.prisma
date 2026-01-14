@@ -17,38 +17,18 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // User's contacts where they are the initiator
-  contacts  Contact[] @relation("UserContacts")
-  // Contacts where this user is the contact
-  contactOf Contact[] @relation("ContactUser")
-
   statuses       Status[]
   invitesCreated Invite[] @relation("InviteCreator")
   invitesUsed    Invite[] @relation("InviteUser")
-  appContacts AppContact[] @relation("UserAppContacts")
-  appContactsAsPlazaUser AppContact[] @relation("AppContactPlazaUser")
+  friends        Friend[] @relation("UserFriends")
+  friendsAsFriend Friend[] @relation("FriendUser")
 
   @@index([phoneHash])
 }
 
-model Contact {
-  id            String        @id @default(uuid())
-  userId        String
-  contactUserId String
-  status        ContactStatus @default(ACTIVE)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  user        User @relation("UserContacts", fields: [userId], references: [id], onDelete: Cascade)
-  contactUser User @relation("ContactUser", fields: [contactUserId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, contactUserId])
-  @@index([userId])
-  @@index([contactUserId])
-}
-
-enum ContactStatus {
+enum FriendStatus {
   ACTIVE
+  MUTED
   BLOCKED
 }
 
@@ -96,19 +76,18 @@ model Invite {
   @@index([inviterId])
 }
 
-model AppContact {
-  id        String   @id @default(uuid())
-  userId    String   // User who selected this contact
-  phoneHash String   // Hashed phone number
-  plazaUserId String? // If this contact is a Plaza user, link to User
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Friend {
+  id          String      @id @default(uuid())
+  userId      String      // User who added this friend
+  friendUserId String     // The Plaza user they added
+  status      FriendStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
-  user      User  @relation("UserAppContacts", fields: [userId], references: [id], onDelete: Cascade)
-  plazaUser User? @relation("AppContactPlazaUser", fields: [plazaUserId], references: [id], onDelete: SetNull)
+  user       User @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friendUser User @relation("FriendUser", fields: [friendUserId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, phoneHash])
+  @@unique([userId, friendUserId])
   @@index([userId])
-  @@index([phoneHash])
-  @@index([plazaUserId])
+  @@index([friendUserId])
 }

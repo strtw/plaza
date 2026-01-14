@@ -74,13 +74,13 @@ export class StatusController {
     }
   }
 
-  @Get('contacts')
-  async getContactsStatuses(@Request() req) {
+  @Get('friends')
+  async getFriendsStatuses(@Request() req) {
     try {
       const databaseUserId = await this.getDatabaseUserId(req.userId);
-      return await this.statusService.getContactsStatuses(databaseUserId);
+      return await this.statusService.getFriendsStatuses(databaseUserId);
     } catch (error: any) {
-      console.error('Error in getContactsStatuses controller:', error);
+      console.error('Error in getFriendsStatuses controller:', error);
       // Return empty array instead of throwing to prevent 500 errors
       return [];
     }

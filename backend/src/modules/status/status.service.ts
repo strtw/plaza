@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { PrismaClient, AvailabilityStatus, ContactStatus, StatusLocation } from '@prisma/client';
+import { PrismaClient, AvailabilityStatus, FriendStatus, StatusLocation } from '@prisma/client';
 import { CreateStatusDto } from './dto/create-status.dto';
 
 const prisma = new PrismaClient();
@@ -66,34 +66,40 @@ export class StatusService {
     }
   }
 
-  async getContactsStatuses(userId: string) {
+  async getFriendsStatuses(userId: string) {
     try {
       // Validate userId
       if (!userId) {
-        console.error('getContactsStatuses: userId is required');
+        console.error('getFriendsStatuses: userId is required');
         return [];
       }
 
-      const contacts = await prisma.contact.findMany({
-        where: { userId, status: ContactStatus.ACTIVE },
-        select: { contactUserId: true },
+      // Query Friend table where friendUserId = current user (people who added current user)
+      // User A adds User B → User B sees User A's status
+      const friends = await prisma.friend.findMany({
+        where: { 
+          friendUserId: userId,  // People who added current user
+          status: FriendStatus.ACTIVE,
+        },
+        select: { userId: true }, // Get the userId values (people who added current user)
       });
 
-      if (contacts.length === 0) {
-        return []; // No contacts, no statuses to fetch
+      if (friends.length === 0) {
+        return []; // No friends, no statuses to fetch
       }
 
-      const contactIds = contacts.map(c => c.contactUserId).filter(Boolean);
+      const friendUserIds = friends.map(f => f.userId).filter(Boolean);
       
-      if (contactIds.length === 0) {
+      if (friendUserIds.length === 0) {
         return [];
       }
 
       const now = new Date();
 
+      // Fetch statuses for those users (people who added current user)
       const statuses = await prisma.status.findMany({
         where: {
-          userId: { in: contactIds },
+          userId: { in: friendUserIds },
           startTime: { lte: now },
           endTime: { gte: now },
         },
@@ -121,7 +127,7 @@ export class StatusService {
 
       return Array.from(statusMap.values());
     } catch (error: any) {
-      console.error('Error fetching contacts statuses:', error);
+      console.error('Error fetching friends statuses:', error);
       console.error('Error details:', {
         message: error?.message,
         stack: error?.stack,

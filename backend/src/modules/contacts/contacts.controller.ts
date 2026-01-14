@@ -1,12 +1,10 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
 import { ContactsService } from './contacts.service';
-import { AddContactDto } from './dto/add-contact.dto';
 import { MatchContactsDto } from './dto/match-contacts.dto';
 import { CheckContactsDto } from './dto/check-contacts.dto';
 import { HashPhonesDto } from './dto/hash-phones.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { UsersService } from '../users/users.service';
-import { clerkClient } from '@clerk/clerk-sdk-node';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -18,36 +16,6 @@ export class ContactsController {
     private readonly contactsService: ContactsService,
     private readonly usersService: UsersService,
   ) {}
-
-  @Get()
-  async getContacts(@Request() req) {
-    // Look up Plaza user by Clerk ID
-    const user = await prisma.user.findUnique({
-      where: { clerkId: req.userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new HttpException('User not found. Please ensure the user exists in the database.', HttpStatus.NOT_FOUND);
-    }
-
-    return this.contactsService.getContacts(user.id);
-  }
-
-  @Post()
-  async addContact(@Request() req, @Body() dto: AddContactDto) {
-    // Look up Plaza user by Clerk ID
-    const user = await prisma.user.findUnique({
-      where: { clerkId: req.userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new HttpException('User not found. Please ensure the user exists in the database.', HttpStatus.NOT_FOUND);
-    }
-
-    return this.contactsService.addContact(user.id, dto.contactUserId);
-  }
 
   @Post('hash-phones')
   async hashPhones(@Request() req, @Body() dto: HashPhonesDto) {
@@ -104,19 +72,5 @@ export class ContactsController {
     }
   }
 
-  @Post(':id/block')
-  async blockContact(@Request() req, @Param('id') contactId: string) {
-    // Look up Plaza user by Clerk ID
-    const user = await prisma.user.findUnique({
-      where: { clerkId: req.userId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new HttpException('User not found. Please ensure the user exists in the database.', HttpStatus.NOT_FOUND);
-    }
-
-    return this.contactsService.blockContact(user.id, contactId);
-  }
 }
 

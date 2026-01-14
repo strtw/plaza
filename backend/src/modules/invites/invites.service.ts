@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaClient, ContactStatus } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { UsersService } from '../users/users.service';
 
@@ -110,30 +110,15 @@ export class InvitesService {
 
     const userId = user.id;
 
-    await prisma.$transaction([
-      prisma.invite.update({
-        where: { code },
-        data: {
-          usedById: userId,
-          usedAt: new Date(),
-        },
-      }),
-      // Create bidirectional contact
-      prisma.contact.create({
-        data: {
-          userId: invite.inviterId,
-          contactUserId: userId,
-          status: ContactStatus.ACTIVE,
-        },
-      }),
-      prisma.contact.create({
-        data: {
-          userId,
-          contactUserId: invite.inviterId,
-          status: ContactStatus.ACTIVE,
-        },
-      }),
-    ]);
+    // Mark invite as used (no automatic friendship creation)
+    // Invite codes are only for discounts/tracking growth
+    await prisma.invite.update({
+      where: { code },
+      data: {
+        usedById: userId,
+        usedAt: new Date(),
+      },
+    });
 
     return { success: true, inviter: invite.inviter };
   }

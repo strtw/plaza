@@ -84,8 +84,8 @@ export const createApi = (getToken: () => Promise<string | null>) => {
         method: 'POST',
         body: JSON.stringify({ firstName, lastName }),
       }),
-    getContacts: () => fetchApi('/contacts'),
-    getContactsStatuses: () => fetchApi('/status/contacts'),
+    getContacts: () => fetchApi('/friends'),
+    getFriendsStatuses: () => fetchApi('/status/friends'),
     getMyStatus: () => fetchApi('/status/me'),
     createStatus: (data: any) =>
       fetchApi('/status', {
@@ -123,13 +123,23 @@ export const createApi = (getToken: () => Promise<string | null>) => {
         method: 'POST',
         body: JSON.stringify({ contacts }),
       }),
-    // App contacts endpoints
-    saveAppContacts: (contacts: Array<{ phone: string; name: string }>) =>
-      fetchApi('/app-contacts', {
+    // Friends endpoints
+    muteFriend: (friendId: string) =>
+      fetchApi(`/friends/${friendId}/mute`, {
         method: 'POST',
-        body: JSON.stringify({ contacts }),
       }),
-    getAppContacts: () => fetchApi('/app-contacts'),
+    blockFriend: (friendId: string) =>
+      fetchApi(`/friends/${friendId}/block`, {
+        method: 'POST',
+      }),
+    unmuteFriend: (friendId: string) =>
+      fetchApi(`/friends/${friendId}/unmute`, {
+        method: 'POST',
+      }),
+    unblockFriend: (friendId: string) =>
+      fetchApi(`/friends/${friendId}/unblock`, {
+        method: 'POST',
+      }),
     deleteAccount: () =>
       fetchApi('/users/me', {
         method: 'DELETE',

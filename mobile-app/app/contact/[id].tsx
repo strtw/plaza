@@ -39,8 +39,8 @@ export default function ContactDetailScreen() {
   });
 
   const { data: statuses } = useQuery({
-    queryKey: ['contacts-statuses'],
-    queryFn: api.getContactsStatuses,
+    queryKey: ['friends-statuses'],
+    queryFn: api.getFriendsStatuses,
   });
 
   const contact = contacts?.find((c: any) => c.id === id);

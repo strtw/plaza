@@ -68,8 +68,8 @@ function ActivityScreenContent() {
   });
 
   const { data: statuses } = useQuery({
-    queryKey: ['contacts-statuses'],
-    queryFn: api.getContactsStatuses,
+    queryKey: ['friends-statuses'],
+    queryFn: api.getFriendsStatuses,
     enabled: isLoaded && isSignedIn,
     refetchInterval: 10000, // Poll every 10 seconds
   });
@@ -157,7 +157,7 @@ function ActivityScreenContent() {
       
       // Invalidate to ensure everything is in sync
       queryClient.invalidateQueries({ queryKey: ['my-status'] });
-      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
       
       // Reset form state
       setMessage('');
@@ -191,7 +191,7 @@ function ActivityScreenContent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-status'] });
-      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
       setShowStatusModal(false);
       Alert.alert('Success', 'Your status has been cleared!');
     },
@@ -426,7 +426,7 @@ function ActivityScreenContent() {
             refreshing={isLoading} 
             onRefresh={() => {
               refetch();
-              queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] });
+              queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
             }} 
           />
         }
