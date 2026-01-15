@@ -1,4 +1,4 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
@@ -6,7 +6,7 @@ import { AvailabilityStatus, StatusLocation, ContactStatus, getFullName } from '
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUserStore } from '../../stores/userStore';
@@ -67,7 +67,7 @@ function ActivityScreenContent() {
     enabled: isLoaded && isSignedIn,
   });
 
-  const { data: statuses } = useQuery({
+  const { data: statuses, refetch: refetchStatuses } = useQuery({
     queryKey: ['friends-statuses'],
     queryFn: api.getFriendsStatuses,
     enabled: isLoaded && isSignedIn,
@@ -233,6 +233,22 @@ function ActivityScreenContent() {
   // Time remaining calculation and update
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // Track status updates for "New updates" indicator
+  const [hasNewUpdates, setHasNewUpdates] = useState(false);
+  const previousStatusesRef = useRef<Array<any>>([]);
+  
+  // Track displayed statuses (what user currently sees - frozen until refresh)
+  const [displayedStatuses, setDisplayedStatuses] = useState<Array<any>>([]);
+  const bannerOpacity = useRef(new Animated.Value(0)).current;
+
+  // Initialize displayedStatuses when statuses first load
+  useEffect(() => {
+    if (statuses && displayedStatuses.length === 0) {
+      setDisplayedStatuses(statuses);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statuses]);
+
   // Update current time every minute
   useEffect(() => {
     const interval = setInterval(() => {
@@ -241,6 +257,46 @@ function ActivityScreenContent() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Detect status changes to show "New updates" indicator
+  // Compare current statuses (from polling) with displayedStatuses (what user sees)
+  useEffect(() => {
+    if (!statuses || displayedStatuses.length === 0) {
+      return;
+    }
+
+    // Compare current statuses with displayed statuses
+    const currentStatusIds = new Set(statuses.map((s: any) => s.id));
+    const displayedStatusIds = new Set(displayedStatuses.map((s: any) => s.id));
+
+    // Check for new or removed statuses
+    const hasNewStatuses = statuses.some((s: any) => !displayedStatusIds.has(s.id));
+    const hasRemovedStatuses = displayedStatuses.some(
+      (s: any) => !currentStatusIds.has(s.id)
+    );
+
+    // Check for updated statuses (same ID but different content)
+    const hasUpdatedStatuses = statuses.some((current: any) => {
+      const displayed = displayedStatuses.find((d: any) => d.id === current.id);
+      if (!displayed) return false;
+      return (
+        displayed.message !== current.message ||
+        displayed.location !== current.location ||
+        displayed.endTime !== current.endTime
+      );
+    });
+
+    if (hasNewStatuses || hasRemovedStatuses || hasUpdatedStatuses) {
+      setHasNewUpdates(true);
+      // Fade in banner
+      Animated.timing(bannerOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statuses, displayedStatuses]);
 
   // Helper function to check if status is expired or expiring soon (< 1 minute)
   const isStatusExpiredOrExpiringSoon = (status: ContactStatus | null): boolean => {
@@ -285,15 +341,21 @@ function ActivityScreenContent() {
     return '<1m';
   };
   
-  // Merge contacts with their statuses
-  const contactsWithStatus = contacts?.map((contact: any) => ({
-    ...contact,
-    status: statuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
-  })) || [];
+  // Merge contacts with their statuses (use displayedStatuses to keep list frozen until refresh)
+  // Memoize to prevent recomputation when statuses (polling) updates
+  const contactsWithStatus = useMemo(() => {
+    return contacts?.map((contact: any) => ({
+      ...contact,
+      status: displayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
+    })) || [];
+  }, [contacts, displayedStatuses]);
 
   // Filter to only show contacts with active statuses
   // Backend already filters statuses by time window (startTime <= now <= endTime)
-  const activeContacts = contactsWithStatus.filter((contact: any) => contact.status !== undefined);
+  // Memoize to prevent recomputation when statuses (polling) updates
+  const activeContacts = useMemo(() => {
+    return contactsWithStatus.filter((contact: any) => contact.status !== undefined);
+  }, [contactsWithStatus]);
 
   const handleSaveStatus = () => {
     if (!message.trim() || !location || !endTime) {
@@ -341,6 +403,17 @@ function ActivityScreenContent() {
 
   // Check if form is ready to save (message, location, and endTime are set)
   const isFormReady = message.trim().length > 0 && location !== null && endTime !== null;
+
+  // Render update banner component with fade-in animation
+  const renderUpdateBanner = () => {
+    if (!hasNewUpdates) return null;
+    return (
+      <Animated.View style={[styles.updateBanner, { opacity: bannerOpacity }]}>
+        <Ionicons name="arrow-down" size={16} color="#007AFF" />
+        <Text style={styles.updateBannerText}>New updates! Pull down to refresh</Text>
+      </Animated.View>
+    );
+  };
 
   if (!isLoaded) {
     return (
@@ -421,12 +494,31 @@ function ActivityScreenContent() {
         data={activeContacts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <ContactListItem contact={item} />}
+        ListHeaderComponent={renderUpdateBanner}
         refreshControl={
           <RefreshControl 
             refreshing={isLoading} 
-            onRefresh={() => {
-              refetch();
-              queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
+            onRefresh={async () => {
+              // Refetch both contacts and statuses
+              await Promise.all([
+                refetch(),
+                refetchStatuses(),
+              ]);
+              // Wait a moment for React Query to update the statuses variable
+              // Then sync displayedStatuses with the updated statuses
+              // This is the ONLY place where displayedStatuses should be updated after initial load
+              setTimeout(() => {
+                if (statuses) {
+                  setDisplayedStatuses([...statuses]); // Create new array to ensure React detects change
+                }
+                setHasNewUpdates(false);
+                // Fade out banner
+                Animated.timing(bannerOpacity, {
+                  toValue: 0,
+                  duration: 200,
+                  useNativeDriver: true,
+                }).start();
+              }, 50);
             }} 
           />
         }
@@ -873,6 +965,22 @@ const styles = StyleSheet.create({
   clearStatusText: {
     fontSize: 16,
     color: '#FF3B30',
+    fontWeight: '600',
+  },
+  updateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#BBDEFB',
+    gap: 8,
+  },
+  updateBannerText: {
+    fontSize: 14,
+    color: '#007AFF',
     fontWeight: '600',
   },
 });
