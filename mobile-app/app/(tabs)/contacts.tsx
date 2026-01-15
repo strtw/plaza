@@ -42,12 +42,13 @@ function HomeScreenContent() {
     },
   });
 
-  const { data: statuses } = useQuery({
-    queryKey: ['friends-statuses'],
-    queryFn: api.getFriendsStatuses,
-    enabled: isLoaded && isSignedIn,
-    refetchInterval: 10000, // Poll every 10 seconds
-  });
+  // Status query removed - contacts tab no longer displays status information
+  // const { data: statuses } = useQuery({
+  //   queryKey: ['friends-statuses'],
+  //   queryFn: api.getFriendsStatuses,
+  //   enabled: isLoaded && isSignedIn,
+  //   refetchInterval: 10000, // Poll every 10 seconds
+  // });
 
   // Mutation for checking which contacts are users
   const checkContactsMutation = useMutation({
@@ -60,7 +61,6 @@ function HomeScreenContent() {
     onSuccess: (data) => {
       // Refresh contacts list
       queryClient.invalidateQueries({ queryKey: ['friends'] });
-      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
       // Note: Alert is handled in the done button handler to avoid duplicate alerts
     },
     onError: (error: any) => {
@@ -78,10 +78,8 @@ function HomeScreenContent() {
   
   // Show Plaza users in the contacts list (people you can actually interact with)
   // These are contacts that have been matched and added via the Contact table
-  const contactsWithStatus = contacts?.map((contact: any) => ({
-    ...contact,
-    status: statuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
-  })) || [];
+  // Note: Status information is not displayed in the contacts tab
+  const contactsWithStatus = contacts || [];
 
 
   // Function to load contacts
@@ -461,7 +459,6 @@ function HomeScreenContent() {
                     // Step 3: Refresh contacts list immediately
                     await Promise.all([
                       queryClient.invalidateQueries({ queryKey: ['friends'] }),
-                      queryClient.invalidateQueries({ queryKey: ['contacts-statuses'] }),
                     ]);
                     
                     // Refetch contacts to ensure the list is updated
