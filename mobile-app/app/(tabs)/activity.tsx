@@ -281,12 +281,47 @@ function ActivityScreenContent() {
   const [hasNewUpdates, setHasNewUpdates] = useState(false);
   const previousStatusesRef = useRef<Array<any>>([]);
   
+  /**
+   * REFRESH → CLEAR PILLS BEHAVIOR
+   * 
+   * The "new" and "updated" pills are designed to highlight changes since the last refresh.
+   * Each refresh creates a fresh baseline - pills from the previous view disappear, and only
+   * items that are NEW or UPDATED since the last refresh get pills.
+   * 
+   * Flow:
+   * 1. Initial load: displayedStatuses is populated, previousDisplayedStatusesRef is empty
+   *    → No pills shown (user hasn't seen anything yet to compare against)
+   * 
+   * 2. Status changes in background: statuses (from polling) updates, but displayedStatuses stays frozen
+   *    → Banner shows "New updates! Pull down to refresh"
+   * 
+   * 3. User pulls to refresh:
+   *    a. Refresh handler captures current displayedStatuses as the baseline
+   *    b. Updates previousDisplayedStatusesRef with this baseline (what user was seeing)
+   *    c. Updates displayedStatuses with fresh data from API
+   *    d. contactsWithStatus memo compares new displayedStatuses against previousDisplayedStatusesRef
+   *    → Pills appear for items that are NEW (didn't exist) or UPDATED (updatedAt changed)
+   * 
+   * 4. User pulls to refresh again:
+   *    a. Refresh handler captures current displayedStatuses (which now includes items with pills)
+   *    b. Updates previousDisplayedStatusesRef with this new baseline
+   *    c. Updates displayedStatuses with fresh data
+   *    d. contactsWithStatus memo compares new displayedStatuses against previousDisplayedStatusesRef
+   *    → Previous pills disappear (those items are now the baseline)
+   *    → Only items that are NEW or UPDATED since THIS refresh get pills
+   * 
+   * Key insight: Each refresh resets the baseline. Items that were already visible and unchanged
+   * will NOT get pills because they exist in both the old and new state with the same updatedAt.
+   */
   // Track displayed statuses (what user currently sees - frozen until refresh)
   const [displayedStatuses, setDisplayedStatuses] = useState<Array<any>>([]);
   // Initialize banner opacity to 1 (always visible) to prevent layout shifts
   const bannerOpacity = useRef(new Animated.Value(1)).current;
   // Pulse animation for when updates are detected
   const bannerPulse = useRef(new Animated.Value(1)).current;
+  // Ref to store previous displayedStatuses for comparison (to detect new/updated items)
+  // This represents the baseline that the user saw BEFORE the last refresh
+  // Updated in refresh handler BEFORE displayedStatuses changes
   const previousDisplayedStatusesRef = useRef<Array<any>>([]);
   const newOrChangedContactIdsRef = useRef<Set<string>>(new Set());
   const newOnlyIdsRef = useRef<Set<string>>(new Set()); // Track only truly new items for pulse
@@ -409,16 +444,19 @@ function ActivityScreenContent() {
   // Memoize to prevent recomputation when statuses (polling) updates
   const contactsWithStatus = useMemo(() => {
     // Check if we have previous state to compare against (not on initial load)
-    // We need both: displayedStatuses must have data AND previousDisplayedStatusesRef must have been set (after first refresh)
+    // On initial load: previousDisplayedStatusesRef is empty → no pills shown (user hasn't seen anything yet)
+    // After first refresh: previousDisplayedStatusesRef contains the baseline → comparison starts working
     const hasPreviousState = previousDisplayedStatusesRef.current.length > 0;
     
-    console.log('[Activity] contactsWithStatus memo recalculating:', {
-      hasPreviousState,
-      previousStatusesCount: previousDisplayedStatusesRef.current.length,
-      displayedStatusesCount: displayedStatuses.length,
-    });
+    // Debug logging (can be removed in production)
+    // console.log('[Activity] contactsWithStatus memo recalculating:', {
+    //   hasPreviousState,
+    //   previousStatusesCount: previousDisplayedStatusesRef.current.length,
+    //   displayedStatusesCount: displayedStatuses.length,
+    // });
     
     // Map previous statuses by status.id (stable after backend UPDATE change)
+    // This represents what the user saw BEFORE the last refresh
     // Use previousDisplayedStatusesRef which is updated in refresh handler BEFORE displayedStatuses changes
     const previousStatusMap = hasPreviousState
       ? new Map(previousDisplayedStatusesRef.current.map((s: any) => {
@@ -433,7 +471,8 @@ function ActivityScreenContent() {
       const contactId = String(contact.id);
       const status = displayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id);
       
-      // Determine if new or updated (only if we have previous state)
+      // Determine if new or updated (only if we have previous state to compare against)
+      // This logic ensures pills only show for items that changed since the last refresh
       let isNew = false;
       let isUpdated = false;
       
@@ -446,22 +485,32 @@ function ActivityScreenContent() {
           console.warn('[Activity] Status missing updatedAt field:', status);
         }
         
+        // Compare current status against previous baseline
         const previousStatus = previousStatusMap.get(status.id);
-        isNew = !previousStatus; // Status didn't exist in previous
-        isUpdated = previousStatus !== undefined && 
-          previousStatus.updatedAt !== status.updatedAt; // Status existed but updatedAt changed
         
-        // Debug logging
-        if (isNew || isUpdated) {
-          console.log('[Activity] Status change detected:', {
-            contactId: contact.id,
-            statusId: status.id,
-            isNew,
-            isUpdated,
-            previousUpdatedAt: previousStatus?.updatedAt,
-            currentUpdatedAt: status.updatedAt,
-          });
-        }
+        // isNew = true: Status ID doesn't exist in previous baseline (truly new status)
+        // This means the user hasn't seen this status before the last refresh
+        isNew = !previousStatus;
+        
+        // isUpdated = true: Status ID exists in previous baseline BUT updatedAt changed
+        // This means the user saw this status before, but it was modified since the last refresh
+        isUpdated = previousStatus !== undefined && 
+          previousStatus.updatedAt !== status.updatedAt;
+        
+        // If both are false: Status exists in previous AND updatedAt is the same
+        // This means the status is unchanged → NO PILL (user has already seen it)
+        
+        // Debug logging (can be removed in production)
+        // if (isNew || isUpdated) {
+        //   console.log('[Activity] Status change detected:', {
+        //     contactId: contact.id,
+        //     statusId: status.id,
+        //     isNew,
+        //     isUpdated,
+        //     previousUpdatedAt: previousStatus?.updatedAt,
+        //     currentUpdatedAt: status.updatedAt,
+        //   });
+        // }
       }
       
       // Keep existing flags for sorting/animations
@@ -477,17 +526,17 @@ function ActivityScreenContent() {
         isUpdated, // For pill display
       };
       
-      // Debug: Log pill flags
-      if (result.isNew || result.isUpdated) {
-        console.log('[Activity] Contact with pill flags:', {
-          contactId: contact.id,
-          contactName: contact.firstName || contact.lastName || 'Unknown',
-          isNew: result.isNew,
-          isUpdated: result.isUpdated,
-          hasStatus: !!status,
-          statusId: status?.id,
-        });
-      }
+      // Debug logging (can be removed in production)
+      // if (result.isNew || result.isUpdated) {
+      //   console.log('[Activity] Contact with pill flags:', {
+      //     contactId: contact.id,
+      //     contactName: contact.firstName || contact.lastName || 'Unknown',
+      //     isNew: result.isNew,
+      //     isUpdated: result.isUpdated,
+      //     hasStatus: !!status,
+      //     statusId: status?.id,
+      //   });
+      // }
       
       return result;
     }) || [];
@@ -714,11 +763,13 @@ function ActivityScreenContent() {
               // This is the ONLY place where displayedStatuses should be updated after initial load
               setTimeout(() => {
                 if (statuses) {
-                  // Store current displayedStatuses as previous BEFORE updating
-                  // This ensures the comparison in contactsWithStatus memo has the correct previous state
+                  // CRITICAL: Capture the CURRENT displayedStatuses (what user is seeing) as the baseline
+                  // This represents the state BEFORE refresh - items the user has already seen
+                  // After refresh, pills will only show for items that are NEW or UPDATED compared to this baseline
                   const currentDisplayed = displayedStatuses.length > 0 ? displayedStatuses : [];
                   
                   // Map previous statuses by status.id (stable after backend UPDATE change)
+                  // This map is used to identify which items are new vs updated vs unchanged
                   const previousStatusMap = new Map(
                     currentDisplayed.map((s: any) => [s.id, s])
                   );
@@ -762,12 +813,17 @@ function ActivityScreenContent() {
                     },
                   });
                   
-                  // Update previous ref with CURRENT displayedStatuses BEFORE updating
-                  // This ensures contactsWithStatus memo can compare old vs new correctly
-                  previousDisplayedStatusesRef.current = [...displayedStatuses];
+                  // CRITICAL: Update previousDisplayedStatusesRef with the OLD state BEFORE updating displayedStatuses
+                  // This ensures that when contactsWithStatus memo recalculates (triggered by setDisplayedStatuses),
+                  // it will compare the NEW displayedStatuses against this OLD baseline
+                  // Result: Items that were already visible and unchanged will NOT get pills
+                  // Only items that are NEW (didn't exist) or UPDATED (updatedAt changed) will get pills
+                  previousDisplayedStatusesRef.current = [...currentDisplayed];
                   
-                  // Update displayed statuses (this will trigger contactsWithStatus memo to recalculate)
-                  // The memo will compare new statuses against previousDisplayedStatusesRef (old statuses)
+                  // Update displayed statuses with fresh data from API
+                  // This triggers contactsWithStatus memo to recalculate
+                  // The memo will compare new displayedStatuses against previousDisplayedStatusesRef (old baseline)
+                  // to determine which items should show "new" or "updated" pills
                   setDisplayedStatuses([...statuses]);
                   
                   // Clear the new/changed flags after animation completes
