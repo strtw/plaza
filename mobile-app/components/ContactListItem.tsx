@@ -14,6 +14,18 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false }: P
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // Debug: Log pill props
+  useEffect(() => {
+    if (isNew || isUpdated) {
+      console.log('[ContactListItem] Pill props:', { 
+        contactId: contact.id, 
+        contactName: contact.firstName || contact.lastName || 'Unknown',
+        isNew, 
+        isUpdated 
+      });
+    }
+  }, [isNew, isUpdated, contact.id]);
+
   // Update current time every minute to refresh time remaining
   useEffect(() => {
     const interval = setInterval(() => {

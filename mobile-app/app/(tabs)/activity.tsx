@@ -409,11 +409,24 @@ function ActivityScreenContent() {
   // Memoize to prevent recomputation when statuses (polling) updates
   const contactsWithStatus = useMemo(() => {
     // Check if we have previous state to compare against (not on initial load)
+    // We need both: displayedStatuses must have data AND previousDisplayedStatusesRef must have been set (after first refresh)
     const hasPreviousState = previousDisplayedStatusesRef.current.length > 0;
     
+    console.log('[Activity] contactsWithStatus memo recalculating:', {
+      hasPreviousState,
+      previousStatusesCount: previousDisplayedStatusesRef.current.length,
+      displayedStatusesCount: displayedStatuses.length,
+    });
+    
     // Map previous statuses by status.id (stable after backend UPDATE change)
+    // Use previousDisplayedStatusesRef which is updated in refresh handler BEFORE displayedStatuses changes
     const previousStatusMap = hasPreviousState
-      ? new Map(previousDisplayedStatusesRef.current.map((s: any) => [s.id, s]))
+      ? new Map(previousDisplayedStatusesRef.current.map((s: any) => {
+          if (!s.id) {
+            console.warn('[Activity] Previous status missing id:', s);
+          }
+          return [s.id, s];
+        }))
       : new Map();
 
     return contacts?.map((contact: any) => {
@@ -425,17 +438,37 @@ function ActivityScreenContent() {
       let isUpdated = false;
       
       if (hasPreviousState && status) {
+        // Debug: Log status structure
+        if (!status.id) {
+          console.warn('[Activity] Status missing id field:', status);
+        }
+        if (!status.updatedAt) {
+          console.warn('[Activity] Status missing updatedAt field:', status);
+        }
+        
         const previousStatus = previousStatusMap.get(status.id);
         isNew = !previousStatus; // Status didn't exist in previous
         isUpdated = previousStatus !== undefined && 
           previousStatus.updatedAt !== status.updatedAt; // Status existed but updatedAt changed
+        
+        // Debug logging
+        if (isNew || isUpdated) {
+          console.log('[Activity] Status change detected:', {
+            contactId: contact.id,
+            statusId: status.id,
+            isNew,
+            isUpdated,
+            previousUpdatedAt: previousStatus?.updatedAt,
+            currentUpdatedAt: status.updatedAt,
+          });
+        }
       }
       
       // Keep existing flags for sorting/animations
       const isNewOrChanged = newOrChangedContactIdsRef.current.has(contactId);
       const isNewOnly = newOnlyIdsRef.current.has(contactId);
       
-      return {
+      const result = {
         ...contact,
         status,
         isNewOrChanged,
@@ -443,6 +476,20 @@ function ActivityScreenContent() {
         isNew, // For pill display
         isUpdated, // For pill display
       };
+      
+      // Debug: Log pill flags
+      if (result.isNew || result.isUpdated) {
+        console.log('[Activity] Contact with pill flags:', {
+          contactId: contact.id,
+          contactName: contact.firstName || contact.lastName || 'Unknown',
+          isNew: result.isNew,
+          isUpdated: result.isUpdated,
+          hasStatus: !!status,
+          statusId: status?.id,
+        });
+      }
+      
+      return result;
     }) || [];
   }, [contacts, displayedStatuses]);
 
@@ -661,9 +708,13 @@ function ActivityScreenContent() {
               // This is the ONLY place where displayedStatuses should be updated after initial load
               setTimeout(() => {
                 if (statuses) {
+                  // Store current displayedStatuses as previous BEFORE updating
+                  // This ensures the comparison in contactsWithStatus memo has the correct previous state
+                  const currentDisplayed = displayedStatuses.length > 0 ? displayedStatuses : [];
+                  
                   // Map previous statuses by status.id (stable after backend UPDATE change)
                   const previousStatusMap = new Map(
-                    previousDisplayedStatusesRef.current.map((s: any) => [s.id, s])
+                    currentDisplayed.map((s: any) => [s.id, s])
                   );
                   
                   // Find new statuses (status.id doesn't exist in previous) - these will pulse
@@ -705,7 +756,12 @@ function ActivityScreenContent() {
                     },
                   });
                   
-                  // Update displayed statuses
+                  // Update previous ref with CURRENT displayedStatuses BEFORE updating
+                  // This ensures contactsWithStatus memo can compare old vs new correctly
+                  previousDisplayedStatusesRef.current = [...displayedStatuses];
+                  
+                  // Update displayed statuses (this will trigger contactsWithStatus memo to recalculate)
+                  // The memo will compare new statuses against previousDisplayedStatusesRef (old statuses)
                   setDisplayedStatuses([...statuses]);
                   
                   // Clear the new/changed flags after animation completes
@@ -713,9 +769,6 @@ function ActivityScreenContent() {
                     newOrChangedContactIdsRef.current.clear();
                     newOnlyIdsRef.current.clear();
                   }, 500);
-                  
-                  // Update previous ref for next comparison (store by status.id for matching)
-                  previousDisplayedStatusesRef.current = [...statuses];
                 }
                 setHasNewUpdates(false);
                 // Banner stays visible, just text changes back to "listening"
