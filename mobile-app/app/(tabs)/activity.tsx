@@ -11,20 +11,40 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUserStore } from '../../stores/userStore';
 
-// Animated wrapper component for new/changed contact items
+// Animated wrapper component for new contact items (fade in with opacity pulse)
 const AnimatedContactListItem = ({ contact }: { contact: any }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    // Fade in first
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 400,
+      duration: 300,
       useNativeDriver: true,
-    }).start();
+    }).start(() => {
+      // After fade in, do opacity pulse (fade in/out)
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.7,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
   }, []);
 
   return (
-    <Animated.View style={{ opacity: fadeAnim }}>
+    <Animated.View 
+      style={{ 
+        opacity: Animated.multiply(fadeAnim, pulseAnim), // Combine fade and pulse
+      }}
+    >
       <ContactListItem contact={contact} />
     </Animated.View>
   );
@@ -264,6 +284,7 @@ function ActivityScreenContent() {
   const bannerPulse = useRef(new Animated.Value(1)).current;
   const previousDisplayedStatusesRef = useRef<Array<any>>([]);
   const newOrChangedContactIdsRef = useRef<Set<string>>(new Set());
+  const newOnlyIdsRef = useRef<Set<string>>(new Set()); // Track only truly new items for pulse
   
   // Enable LayoutAnimation on Android
   if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -381,11 +402,17 @@ function ActivityScreenContent() {
   // Merge contacts with their statuses (use displayedStatuses to keep list frozen until refresh)
   // Memoize to prevent recomputation when statuses (polling) updates
   const contactsWithStatus = useMemo(() => {
-    return contacts?.map((contact: any) => ({
-      ...contact,
-      status: displayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
-      isNewOrChanged: newOrChangedContactIdsRef.current.has(contact.id),
-    })) || [];
+    return contacts?.map((contact: any) => {
+      const contactId = String(contact.id);
+      const isNewOrChanged = newOrChangedContactIdsRef.current.has(contactId);
+      const isNewOnly = newOnlyIdsRef.current.has(contactId); // Only truly new items pulse
+      return {
+        ...contact,
+        status: displayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
+        isNewOrChanged: isNewOrChanged,
+        isNewOnly: isNewOnly, // Only truly new items (not just changed)
+      };
+    }) || [];
   }, [contacts, displayedStatuses]);
 
   // Filter to only show contacts with active statuses and sort: new/changed first
@@ -553,7 +580,7 @@ function ActivityScreenContent() {
         data={activeContacts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
-          // Use animated wrapper for new/changed items
+          // Use animated wrapper for both new and changed items (both get pulse animation)
           if (item.isNewOrChanged) {
             return <AnimatedContactListItem contact={item} />;
           }
@@ -578,7 +605,7 @@ function ActivityScreenContent() {
                   const currentStatusIds = new Set(statuses.map((s: any) => s.user?.id || s.userId));
                   const previousStatusIds = new Set(previousDisplayedStatusesRef.current.map((s: any) => s.user?.id || s.userId));
                   
-                  // Find new statuses (not in previous)
+                  // Find new statuses (not in previous) - these will pulse
                   const newStatusIds = new Set<string>(
                     statuses
                       .filter((s: any) => {
@@ -591,7 +618,7 @@ function ActivityScreenContent() {
                       .map((s: any) => String(s.user?.id || s.userId))
                   );
                   
-                  // Find changed statuses (same ID but different content)
+                  // Find changed statuses (same ID but different content) - these won't pulse
                   const changedStatusIds = new Set<string>(
                     statuses
                       .filter((current: any) => {
@@ -610,11 +637,14 @@ function ActivityScreenContent() {
                       .map((s: any) => String(s.user?.id || s.userId))
                   );
                   
-                  // Combine new and changed IDs
+                  // Store all (new + changed) for sorting to top
                   newOrChangedContactIdsRef.current = new Set<string>([
                     ...Array.from(newStatusIds),
                     ...Array.from(changedStatusIds),
                   ]);
+                  
+                  // Store only new IDs for pulse detection (only truly new items pulse)
+                  newOnlyIdsRef.current = newStatusIds;
                   
                   // Configure layout animation for smooth list reordering
                   LayoutAnimation.configureNext({
@@ -634,6 +664,7 @@ function ActivityScreenContent() {
                   // Clear the new/changed flags after animation completes
                   setTimeout(() => {
                     newOrChangedContactIdsRef.current.clear();
+                    newOnlyIdsRef.current.clear();
                   }, 500);
                   
                   // Update previous ref for next comparison
