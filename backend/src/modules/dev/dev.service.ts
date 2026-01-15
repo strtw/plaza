@@ -7,7 +7,7 @@
 
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { PrismaClient, AvailabilityStatus, StatusLocation } from '@prisma/client';
+import { PrismaClient, AvailabilityStatus, StatusLocation, FriendStatus } from '@prisma/client';
 import { hashPhone } from '../../common/utils/phone-hash.util';
 
 const prisma = new PrismaClient();
@@ -116,38 +116,81 @@ export class DevService {
    */
   @Cron('*/5 * * * *', { name: 'simulate-status-changes' })
   async simulateStatusChanges() {
-    // Safety checks: only run in dev and if feature flag is enabled
-    if (process.env.NODE_ENV === 'production') {
-      return;
-    }
+    // Debug logging
+    console.log('[DevService] Cron job triggered', {
+      NODE_ENV: process.env.NODE_ENV,
+      ENABLE_STATUS_SIMULATION: process.env.ENABLE_STATUS_SIMULATION,
+      timestamp: new Date().toISOString(),
+    });
 
+    // Safety check: only run if feature flag is explicitly enabled
+    // Note: We rely on the feature flag for control, not NODE_ENV
+    // This allows running in Railway production if needed for testing
     if (process.env.ENABLE_STATUS_SIMULATION !== 'true') {
+      console.log('[DevService] Skipping: ENABLE_STATUS_SIMULATION is not "true"');
       return; // Feature flag not enabled, exit early to save compute
     }
 
     try {
       console.log('[DevService] Status simulation started');
 
-      // Find test users (clerkId starts with 'test_')
+      // Find the primary user (you) by clerkId
+      const primaryUser = await prisma.user.findUnique({
+        where: {
+          clerkId: 'user_',
+        },
+        select: {
+          id: true,
+          clerkId: true,
+        },
+      });
+
+      if (!primaryUser) {
+        console.log('[DevService] Primary user (clerkId: "user_") not found for status simulation');
+        return;
+      }
+
+      console.log(`[DevService] Found primary user: ${primaryUser.id}`);
+
+      // Get people who have added the primary user as a friend
+      // These are the users whose statuses will appear in the primary user's Activity tab
+      const friendRecords = await prisma.friend.findMany({
+        where: {
+          friendUserId: primaryUser.id, // People who added the primary user
+          status: FriendStatus.ACTIVE,
+        },
+        select: {
+          userId: true, // The users who added the primary user
+        },
+        take: 10, // Max 10 users
+      });
+
+      if (friendRecords.length === 0) {
+        console.log('[DevService] No users found who have added primary user as friend');
+        return;
+      }
+
+      const userIds = friendRecords.map(f => f.userId).filter(Boolean);
+
+      // Fetch user details for these IDs (people broadcasting to the primary user)
       const testUsers = await prisma.user.findMany({
         where: {
-          clerkId: {
-            startsWith: 'test_',
+          id: {
+            in: userIds,
           },
         },
         select: {
           id: true,
           clerkId: true,
         },
-        take: 10, // Max 10 users
       });
 
       if (testUsers.length === 0) {
-        console.log('[DevService] No test users found for status simulation');
+        console.log('[DevService] No valid users found for status simulation');
         return;
       }
 
-      console.log(`[DevService] Simulating status changes for ${testUsers.length} test users`);
+      console.log(`[DevService] Simulating status changes for ${testUsers.length} users who are broadcasting to primary user`);
 
       const locations: StatusLocation[] = [
         StatusLocation.HOME,
