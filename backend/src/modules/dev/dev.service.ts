@@ -20,8 +20,23 @@ export class DevService {
    * Create mock users for the given contacts (phone + name)
    * Uses the actual contact name from the phone
    * Phone numbers are hashed before storing (privacy-first design)
+   * Automatically creates Friend relationships where mock users add the primary user as a friend
    */
   async createMockUsers(contacts: Array<{ phone: string; name: string }>): Promise<{ created: number; users: any[] }> {
+    // Find primary user first (clerkId starting with 'user_')
+    const primaryUser = await prisma.user.findFirst({
+      where: {
+        clerkId: {
+          startsWith: 'user_',
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!primaryUser) {
+      throw new Error('Primary user (clerkId starting with "user_") not found. Cannot create friend relationships.');
+    }
+
     const createdUsers: Array<{ id: string; firstName: string | null; lastName: string | null }> = [];
 
     for (const contact of contacts) {
@@ -77,6 +92,43 @@ export class DevService {
         lastName: user.lastName,
         // Note: phone number not returned (privacy-first design)
       });
+
+      // Create Friend relationship: mock user adds primary user as friend
+      const existingFriendship = await prisma.friend.findUnique({
+        where: {
+          userId_friendUserId: {
+            userId: user.id,
+            friendUserId: primaryUser.id,
+          },
+        },
+      });
+
+      if (!existingFriendship) {
+        await prisma.friend.create({
+          data: {
+            userId: user.id, // Mock user is adding the primary user
+            friendUserId: primaryUser.id, // Primary user is being added
+            status: FriendStatus.ACTIVE,
+          },
+        });
+        console.log(`[DevService] Created friendship: mock user ${user.id} added primary user as friend`);
+      } else {
+        // If friendship exists but is not ACTIVE, update it to ACTIVE
+        if (existingFriendship.status !== FriendStatus.ACTIVE) {
+          await prisma.friend.update({
+            where: {
+              userId_friendUserId: {
+                userId: user.id,
+                friendUserId: primaryUser.id,
+              },
+            },
+            data: {
+              status: FriendStatus.ACTIVE,
+            },
+          });
+          console.log(`[DevService] Updated existing friendship to ACTIVE for mock user ${user.id}`);
+        }
+      }
     }
 
     return {
