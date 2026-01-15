@@ -280,6 +280,15 @@ export class DevService {
 
       console.log(`[DevService] Simulating status changes for ${testUsers.length} users who are broadcasting to primary user`);
 
+      // Only process 60-70% of users, leaving the rest unchanged
+      // This ensures we can see NEW, UPDATED, and unchanged statuses in the app
+      const processPercentage = 0.65; // 65% of users will have changes
+      const usersToProcess = Math.max(1, Math.floor(testUsers.length * processPercentage));
+      const shuffledUsers = [...testUsers].sort(() => Math.random() - 0.5); // Randomize order
+      const selectedUsers = shuffledUsers.slice(0, usersToProcess);
+      
+      console.log(`[DevService] Processing ${selectedUsers.length} of ${testUsers.length} users (${Math.round(processPercentage * 100)}%)`);
+
       const locations: StatusLocation[] = [
         StatusLocation.HOME,
         StatusLocation.GREENSPACE,
