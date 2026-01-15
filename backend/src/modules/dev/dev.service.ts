@@ -313,10 +313,24 @@ export class DevService {
 
       for (const user of testUsers) {
         try {
-          // Check if user has existing status
+          const now = new Date();
+          
+          // Check if user has existing ACTIVE status (within time window)
           const existingStatus = await prisma.status.findFirst({
-            where: { userId: user.id },
+            where: {
+              userId: user.id,
+              startTime: { lte: now },
+              endTime: { gte: now },
+            },
             orderBy: { createdAt: 'desc' },
+          });
+
+          // Delete expired statuses first (maintains one-status-per-user rule)
+          await prisma.status.deleteMany({
+            where: {
+              userId: user.id,
+              endTime: { lt: now },
+            },
           });
 
           // Random action: 40% set, 30% update, 30% clear
@@ -326,12 +340,11 @@ export class DevService {
           if (random < 0.4) {
             action = 'set';
           } else if (random < 0.7) {
-            action = existingStatus ? 'update' : 'set'; // Fallback to set if no status exists
+            action = existingStatus ? 'update' : 'set'; // Fallback to set if no active status
           } else {
             action = 'clear';
           }
 
-          const now = new Date();
           const endTime = getEndTimeAt15MinuteInterval();
 
           if (action === 'set' || (action === 'update' && existingStatus)) {
@@ -339,26 +352,31 @@ export class DevService {
             const randomMessage = this.statusMessages[Math.floor(Math.random() * this.statusMessages.length)];
             const randomLocation = locations[Math.floor(Math.random() * locations.length)];
 
-            // Delete existing status first (StatusService.createStatus does this, but we'll do it explicitly)
+            const statusData = {
+              status: AvailabilityStatus.AVAILABLE,
+              message: randomMessage,
+              location: randomLocation,
+              startTime: now,
+              endTime: endTime,
+            };
+
             if (existingStatus) {
-              await prisma.status.deleteMany({
-                where: { userId: user.id },
+              // UPDATE existing active status (preserves id and createdAt)
+              await prisma.status.update({
+                where: { id: existingStatus.id },
+                data: statusData,
               });
+              console.log(`[DevService] Updated status for user ${user.id}: "${randomMessage}" at ${randomLocation}`);
+            } else {
+              // CREATE new status (no active status exists)
+              await prisma.status.create({
+                data: {
+                  userId: user.id,
+                  ...statusData,
+                },
+              });
+              console.log(`[DevService] Set status for user ${user.id}: "${randomMessage}" at ${randomLocation}`);
             }
-
-            // Create new status
-            await prisma.status.create({
-              data: {
-                userId: user.id,
-                status: AvailabilityStatus.AVAILABLE,
-                message: randomMessage,
-                location: randomLocation,
-                startTime: now,
-                endTime: endTime,
-              },
-            });
-
-            console.log(`[DevService] ${action === 'set' ? 'Set' : 'Updated'} status for user ${user.id}: "${randomMessage}" at ${randomLocation}`);
           } else if (action === 'clear' && existingStatus) {
             // Clear status (delete it)
             await prisma.status.deleteMany({
@@ -366,8 +384,8 @@ export class DevService {
             });
             console.log(`[DevService] Cleared status for user ${user.id}`);
           } else {
-            // No-op: clear requested but no status exists, or update requested but no status exists (already handled above)
-            console.log(`[DevService] Skipped ${action} for user ${user.id} (no status exists)`);
+            // No-op: clear requested but no status exists, or update requested but no status exists
+            console.log(`[DevService] Skipped ${action} for user ${user.id} (no active status exists)`);
           }
         } catch (userError: any) {
           console.error(`[DevService] Error simulating status for user ${user.id}:`, userError);
