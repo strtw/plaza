@@ -286,8 +286,30 @@ export class DevService {
         StatusLocation.THIRD_PLACE,
       ];
 
-      // 15-minute interval options (in minutes)
-      const endTimeIntervals = [15, 30, 45, 60, 75, 90, 105, 120];
+      // Helper function to round time to nearest 15 minutes (matching frontend logic)
+      const roundToNearest15Minutes = (date: Date): Date => {
+        const rounded = new Date(date);
+        const minutes = rounded.getMinutes();
+        const roundedMinutes = Math.round(minutes / 15) * 15;
+        rounded.setMinutes(roundedMinutes, 0, 0);
+        return rounded;
+      };
+
+      // Helper function to round UP to next 15-minute interval, then add random 15-minute intervals
+      const getEndTimeAt15MinuteInterval = (): Date => {
+        const now = new Date();
+        const minutes = now.getMinutes();
+        // Round UP to next 15-minute interval
+        const roundedUpMinutes = Math.ceil(minutes / 15) * 15;
+        const roundedUp = new Date(now);
+        roundedUp.setMinutes(roundedUpMinutes, 0, 0);
+        
+        // Add random number of 15-minute intervals (1-8 intervals = 15-120 minutes)
+        const intervalsToAdd = Math.floor(Math.random() * 8) + 1; // 1 to 8 intervals
+        roundedUp.setMinutes(roundedUp.getMinutes() + (intervalsToAdd * 15));
+        
+        return roundedUp;
+      };
 
       for (const user of testUsers) {
         try {
@@ -310,8 +332,7 @@ export class DevService {
           }
 
           const now = new Date();
-          const randomInterval = endTimeIntervals[Math.floor(Math.random() * endTimeIntervals.length)];
-          const endTime = new Date(now.getTime() + randomInterval * 60 * 1000);
+          const endTime = getEndTimeAt15MinuteInterval();
 
           if (action === 'set' || (action === 'update' && existingStatus)) {
             // Set or update status
