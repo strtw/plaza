@@ -127,7 +127,8 @@ export class DevService {
       const timeSinceLastRun = now.getTime() - this.lastSimulationRun.getTime();
       const intervalMs = intervalMinutes * 60 * 1000;
       if (timeSinceLastRun < intervalMs) {
-        return; // Not enough time has passed
+        // Not enough time has passed, return early
+        return;
       }
     }
 
@@ -136,7 +137,8 @@ export class DevService {
       NODE_ENV: process.env.NODE_ENV,
       ENABLE_STATUS_SIMULATION: process.env.ENABLE_STATUS_SIMULATION,
       STATUS_SIMULATION_INTERVAL_MINUTES: intervalMinutes,
-      timestamp: new Date().toISOString(),
+      lastSimulationRun: this.lastSimulationRun?.toISOString() || 'never',
+      timestamp: now.toISOString(),
     });
 
     // Safety check: only run if feature flag is explicitly enabled
@@ -149,6 +151,16 @@ export class DevService {
 
     try {
       console.log('[DevService] Status simulation started');
+
+      // Debug: List all users to help diagnose
+      const allUsers = await prisma.user.findMany({
+        select: { id: true, clerkId: true },
+        take: 20, // Limit to first 20 for logging
+      });
+      console.log(`[DevService] Total users in database: ${allUsers.length}`);
+      if (allUsers.length > 0) {
+        console.log('[DevService] Sample user clerkIds:', allUsers.map(u => u.clerkId).join(', '));
+      }
 
       // Find the primary user (you) by clerkId starting with 'user_'
       const primaryUser = await prisma.user.findFirst({
@@ -165,6 +177,8 @@ export class DevService {
 
       if (!primaryUser) {
         console.log('[DevService] Primary user (clerkId starting with "user_") not found for status simulation');
+        // Update last run time even on early return to prevent constant retries
+        this.lastSimulationRun = now;
         return;
       }
 
@@ -185,6 +199,8 @@ export class DevService {
 
       if (friendRecords.length === 0) {
         console.log('[DevService] No users found who have added primary user as friend');
+        // Update last run time even on early return to prevent constant retries
+        this.lastSimulationRun = now;
         return;
       }
 
@@ -205,6 +221,8 @@ export class DevService {
 
       if (testUsers.length === 0) {
         console.log('[DevService] No valid users found for status simulation');
+        // Update last run time even on early return to prevent constant retries
+        this.lastSimulationRun = now;
         return;
       }
 
