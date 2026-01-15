@@ -311,7 +311,7 @@ export class DevService {
         return roundedUp;
       };
 
-      for (const user of testUsers) {
+      for (const user of selectedUsers) {
         try {
           const now = new Date();
           

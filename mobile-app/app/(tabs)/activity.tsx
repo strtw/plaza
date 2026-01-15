@@ -493,15 +493,21 @@ function ActivityScreenContent() {
     }) || [];
   }, [contacts, displayedStatuses]);
 
-  // Filter to only show contacts with active statuses and sort: new/changed first
+  // Filter to only show contacts with active statuses and sort: NEW first, then UPDATED, then unchanged
   // Backend already filters statuses by time window (startTime <= now <= endTime)
   // Memoize to prevent recomputation when statuses (polling) updates
   const activeContacts = useMemo(() => {
     const filtered = contactsWithStatus.filter((contact: any) => contact.status !== undefined);
-    // Sort: new/changed items first, then by name
+    // Sort: NEW items first, then UPDATED items, then unchanged, then by name
     return filtered.sort((a: any, b: any) => {
-      if (a.isNewOrChanged && !b.isNewOrChanged) return -1;
-      if (!a.isNewOrChanged && b.isNewOrChanged) return 1;
+      // NEW items first
+      if (a.isNew && !b.isNew) return -1;
+      if (!a.isNew && b.isNew) return 1;
+      
+      // UPDATED items second (isUpdated but not isNew)
+      if (a.isUpdated && !a.isNew && !b.isUpdated) return -1;
+      if (!a.isUpdated && b.isUpdated && !b.isNew) return 1;
+      
       // Both same type, sort by name
       const nameA = getFullName(a).toLowerCase();
       const nameB = getFullName(b).toLowerCase();
