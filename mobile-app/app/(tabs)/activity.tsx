@@ -1,4 +1,4 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, LayoutAnimation, UIManager } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
@@ -10,6 +10,25 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUserStore } from '../../stores/userStore';
+
+// Animated wrapper component for new/changed contact items
+const AnimatedContactListItem = ({ contact }: { contact: any }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim }}>
+      <ContactListItem contact={contact} />
+    </Animated.View>
+  );
+};
 
 // Helper function to round time to nearest 15 minutes
 const roundToNearest15Minutes = (date: Date): Date => {
@@ -240,11 +259,19 @@ function ActivityScreenContent() {
   // Track displayed statuses (what user currently sees - frozen until refresh)
   const [displayedStatuses, setDisplayedStatuses] = useState<Array<any>>([]);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const previousDisplayedStatusesRef = useRef<Array<any>>([]);
+  const newOrChangedContactIdsRef = useRef<Set<string>>(new Set());
+  
+  // Enable LayoutAnimation on Android
+  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
 
   // Initialize displayedStatuses when statuses first load
   useEffect(() => {
     if (statuses && displayedStatuses.length === 0) {
       setDisplayedStatuses(statuses);
+      previousDisplayedStatusesRef.current = [...statuses];
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statuses]);
@@ -347,14 +374,24 @@ function ActivityScreenContent() {
     return contacts?.map((contact: any) => ({
       ...contact,
       status: displayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
+      isNewOrChanged: newOrChangedContactIdsRef.current.has(contact.id),
     })) || [];
   }, [contacts, displayedStatuses]);
 
-  // Filter to only show contacts with active statuses
+  // Filter to only show contacts with active statuses and sort: new/changed first
   // Backend already filters statuses by time window (startTime <= now <= endTime)
   // Memoize to prevent recomputation when statuses (polling) updates
   const activeContacts = useMemo(() => {
-    return contactsWithStatus.filter((contact: any) => contact.status !== undefined);
+    const filtered = contactsWithStatus.filter((contact: any) => contact.status !== undefined);
+    // Sort: new/changed items first, then by name
+    return filtered.sort((a: any, b: any) => {
+      if (a.isNewOrChanged && !b.isNewOrChanged) return -1;
+      if (!a.isNewOrChanged && b.isNewOrChanged) return 1;
+      // Both same type, sort by name
+      const nameA = getFullName(a).toLowerCase();
+      const nameB = getFullName(b).toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
   }, [contactsWithStatus]);
 
   const handleSaveStatus = () => {
@@ -493,7 +530,13 @@ function ActivityScreenContent() {
       <FlatList
         data={activeContacts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ContactListItem contact={item} />}
+        renderItem={({ item }) => {
+          // Use animated wrapper for new/changed items
+          if (item.isNewOrChanged) {
+            return <AnimatedContactListItem contact={item} />;
+          }
+          return <ContactListItem contact={item} />;
+        }}
         ListHeaderComponent={renderUpdateBanner}
         refreshControl={
           <RefreshControl 
@@ -509,7 +552,70 @@ function ActivityScreenContent() {
               // This is the ONLY place where displayedStatuses should be updated after initial load
               setTimeout(() => {
                 if (statuses) {
-                  setDisplayedStatuses([...statuses]); // Create new array to ensure React detects change
+                  // Detect new or changed statuses before updating
+                  const currentStatusIds = new Set(statuses.map((s: any) => s.user?.id || s.userId));
+                  const previousStatusIds = new Set(previousDisplayedStatusesRef.current.map((s: any) => s.user?.id || s.userId));
+                  
+                  // Find new statuses (not in previous)
+                  const newStatusIds = new Set<string>(
+                    statuses
+                      .filter((s: any) => {
+                        const statusId = s.user?.id || s.userId;
+                        return !previousDisplayedStatusesRef.current.some((prev: any) => {
+                          const prevId = prev.user?.id || prev.userId;
+                          return prevId === statusId;
+                        });
+                      })
+                      .map((s: any) => String(s.user?.id || s.userId))
+                  );
+                  
+                  // Find changed statuses (same ID but different content)
+                  const changedStatusIds = new Set<string>(
+                    statuses
+                      .filter((current: any) => {
+                        const currentId = current.user?.id || current.userId;
+                        const previous = previousDisplayedStatusesRef.current.find((p: any) => {
+                          const prevId = p.user?.id || p.userId;
+                          return prevId === currentId;
+                        });
+                        if (!previous) return false;
+                        return (
+                          previous.message !== current.message ||
+                          previous.location !== current.location ||
+                          previous.endTime !== current.endTime
+                        );
+                      })
+                      .map((s: any) => String(s.user?.id || s.userId))
+                  );
+                  
+                  // Combine new and changed IDs
+                  newOrChangedContactIdsRef.current = new Set<string>([
+                    ...Array.from(newStatusIds),
+                    ...Array.from(changedStatusIds),
+                  ]);
+                  
+                  // Configure layout animation for smooth list reordering
+                  LayoutAnimation.configureNext({
+                    duration: 300,
+                    create: {
+                      type: LayoutAnimation.Types.easeInEaseOut,
+                      property: LayoutAnimation.Properties.opacity,
+                    },
+                    update: {
+                      type: LayoutAnimation.Types.easeInEaseOut,
+                    },
+                  });
+                  
+                  // Update displayed statuses
+                  setDisplayedStatuses([...statuses]);
+                  
+                  // Clear the new/changed flags after animation completes
+                  setTimeout(() => {
+                    newOrChangedContactIdsRef.current.clear();
+                  }, 500);
+                  
+                  // Update previous ref for next comparison
+                  previousDisplayedStatusesRef.current = [...statuses];
                 }
                 setHasNewUpdates(false);
                 // Fade out banner
