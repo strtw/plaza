@@ -1,6 +1,8 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Contact, AvailabilityStatus, getFullName } from '../lib/types';
+import { Contact, AvailabilityStatus, StatusLocation, getFullName } from '../lib/types';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useState, useEffect } from 'react';
 
 interface Props {
   contact: Contact;
@@ -8,9 +10,72 @@ interface Props {
 
 export function ContactListItem({ contact }: Props) {
   const router = useRouter();
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every minute to refresh time remaining
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Helper function to check if status is expired or expiring soon (< 1 minute)
+  const isStatusExpiredOrExpiringSoon = (): boolean => {
+    if (!contact.status?.endTime) return true;
+    const end = new Date(contact.status.endTime);
+    const diffMs = end.getTime() - currentTime.getTime();
+    return diffMs <= 60000; // Less than 1 minute
+  };
+
+  // Get time remaining until status expires
+  const getTimeRemaining = (): string => {
+    if (!contact.status?.endTime) return '';
+    const end = new Date(contact.status.endTime);
+    const diffMs = end.getTime() - currentTime.getTime();
+
+    // Guard clause: if expired, return empty string
+    if (diffMs <= 0) {
+      return '';
+    }
+
+    const diffMinutes = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const remainingMinutes = diffMinutes % 60;
+
+    if (diffHours >= 1) {
+      if (remainingMinutes > 0) {
+        // Format: "1h 15m" or "2h 30m"
+        return `${diffHours}h ${remainingMinutes}m`;
+      }
+      // Exactly X hours: "1h" or "2h"
+      return `${diffHours}h`;
+    }
+
+    if (diffMinutes >= 1) {
+      // Format: "18m"
+      return `${diffMinutes}m`;
+    }
+
+    return '<1m';
+  };
 
   const getStatusColor = () => {
     if (!contact.status) return '#999';
+    
+    // Check if time remaining is 15 minutes or less - use yellow
+    if (contact.status.endTime) {
+      const end = new Date(contact.status.endTime);
+      const diffMs = end.getTime() - currentTime.getTime();
+      const diffMinutes = Math.floor(diffMs / 60000);
+      
+      if (diffMinutes > 0 && diffMinutes <= 15) {
+        return '#FFC107'; // Yellow for 15 minutes or less
+      }
+    }
+    
+    // Otherwise use normal status color
     switch (contact.status.status) {
       case AvailabilityStatus.AVAILABLE:
         return '#25D366'; // WhatsApp green
@@ -44,6 +109,23 @@ export function ContactListItem({ contact }: Props) {
 
   const displayName = getFullName(contact);
 
+  // Get location icon name based on status location (matching status modal icons)
+  const getLocationIcon = (): keyof typeof Ionicons.glyphMap | null => {
+    if (!contact.status?.location) return null;
+    switch (contact.status.location) {
+      case StatusLocation.HOME:
+        return 'home-outline';
+      case StatusLocation.GREENSPACE:
+        return 'leaf';
+      case StatusLocation.THIRD_PLACE:
+        return 'business';
+      default:
+        return null;
+    }
+  };
+
+  const locationIcon = getLocationIcon();
+
   return (
     <Pressable
       onPress={() => router.push(`/contact/${contact.id}`)}
@@ -53,16 +135,35 @@ export function ContactListItem({ contact }: Props) {
         <View style={[styles.avatar, { backgroundColor: getAvatarColor() }]}>
           <Text style={styles.avatarText}>{getInitials()}</Text>
         </View>
-        {/* Status indicator dot */}
-        {contact.status && (
-          <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
-        )}
       </View>
       <View style={styles.content}>
         <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={1}>
-            {displayName}
-          </Text>
+          <View style={styles.nameAndStatus}>
+            <Text style={styles.name} numberOfLines={1}>
+              {displayName}
+            </Text>
+            {contact.status?.message && (
+              <Text style={styles.statusText} numberOfLines={1}>
+                {contact.status.message}
+              </Text>
+            )}
+          </View>
+          <View style={styles.rightIcons}>
+            {/* Time remaining bubble - positioned left of location icon */}
+            {contact.status && !isStatusExpiredOrExpiringSoon() && (
+              <View style={[styles.timeBubble, { backgroundColor: getStatusColor() }]}>
+                <Text style={styles.timeBubbleText}>{getTimeRemaining()}</Text>
+              </View>
+            )}
+            {locationIcon && (
+              <Ionicons 
+                name={locationIcon} 
+                size={20} 
+                color="#666" 
+                style={styles.locationIcon}
+              />
+            )}
+          </View>
         </View>
       </View>
     </Pressable>
@@ -96,16 +197,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  statusDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
   content: {
     flex: 1,
     justifyContent: 'center',
@@ -113,12 +204,42 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    justifyContent: 'space-between',
+  },
+  nameAndStatus: {
+    flex: 1,
+    marginRight: 8,
   },
   name: {
     fontSize: 16,
     fontWeight: '500',
     color: '#000',
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#667781',
+    marginTop: 2,
+  },
+  rightIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeBubble: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeBubbleText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  locationIcon: {
+    // No margin needed, gap handles spacing
   },
   subtext: {
     fontSize: 14,
