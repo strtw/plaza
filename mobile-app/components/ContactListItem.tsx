@@ -6,9 +6,10 @@ import { useState, useEffect } from 'react';
 
 interface Props {
   contact: Contact;
+  isNew?: boolean; // Optional prop to indicate if this is a new/updated item
 }
 
-export function ContactListItem({ contact }: Props) {
+export function ContactListItem({ contact, isNew = false }: Props) {
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -129,7 +130,7 @@ export function ContactListItem({ contact }: Props) {
   return (
     <Pressable
       onPress={() => router.push(`/contact/${contact.id}`)}
-      style={styles.container}
+      style={[styles.container, isNew && { backgroundColor: '#E8F5E9' }]}
     >
       <View style={styles.avatarContainer}>
         <View style={[styles.avatar, { backgroundColor: getAvatarColor() }]}>

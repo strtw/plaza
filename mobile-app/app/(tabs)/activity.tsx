@@ -45,7 +45,7 @@ const AnimatedContactListItem = ({ contact }: { contact: any }) => {
         opacity: Animated.multiply(fadeAnim, pulseAnim), // Combine fade and pulse
       }}
     >
-      <ContactListItem contact={contact} />
+      <ContactListItem contact={contact} isNew={true} />
     </Animated.View>
   );
 };
@@ -478,6 +478,20 @@ function ActivityScreenContent() {
   // Check if form is ready to save (message, location, and endTime are set)
   const isFormReady = message.trim().length > 0 && location !== null && endTime !== null;
 
+  // Render separator component between new and existing items
+  const renderSeparator = () => {
+    return (
+      <View style={styles.separatorContainer}>
+        <View style={styles.separatorLine} />
+        <View style={styles.separatorContent}>
+          <Ionicons name="arrow-up" size={14} color="#999" />
+          <Text style={styles.separatorText}>new</Text>
+        </View>
+        <View style={styles.separatorLine} />
+      </View>
+    );
+  };
+
   // Render update banner component - always visible, text changes based on hasNewUpdates
   const renderUpdateBanner = () => {
     // Always show banner to prevent layout shifts
@@ -579,12 +593,23 @@ function ActivityScreenContent() {
       <FlatList
         data={activeContacts}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => {
-          // Use animated wrapper for both new and changed items (both get pulse animation)
-          if (item.isNewOrChanged) {
-            return <AnimatedContactListItem contact={item} />;
-          }
-          return <ContactListItem contact={item} />;
+        renderItem={({ item, index }) => {
+          // Check if we need to show separator (current item is existing, previous was new/changed)
+          const prevItem = activeContacts[index - 1];
+          const showSeparator = 
+            !item.isNewOrChanged && 
+            prevItem?.isNewOrChanged;
+          
+          return (
+            <>
+              {showSeparator && renderSeparator()}
+              {item.isNewOrChanged ? (
+                <AnimatedContactListItem contact={item} />
+              ) : (
+                <ContactListItem contact={item} />
+              )}
+            </>
+          );
         }}
         ListHeaderComponent={renderUpdateBanner}
         refreshControl={
@@ -1136,5 +1161,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '600',
+  },
+  separatorContainer: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  separatorLine: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    flex: 1,
+  },
+  separatorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  separatorText: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '500',
+    textTransform: 'uppercase',
   },
 });
