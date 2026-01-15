@@ -14,18 +14,6 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false }: P
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Debug: Log pill props
-  useEffect(() => {
-    if (isNew || isUpdated) {
-      console.log('[ContactListItem] Pill props:', { 
-        contactId: contact.id, 
-        contactName: contact.firstName || contact.lastName || 'Unknown',
-        isNew, 
-        isUpdated 
-      });
-    }
-  }, [isNew, isUpdated, contact.id]);
-
   // Update current time every minute to refresh time remaining
   useEffect(() => {
     const interval = setInterval(() => {
@@ -143,22 +131,16 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false }: P
   return (
     <Pressable
       onPress={() => router.push(`/contact/${contact.id}`)}
-      style={[styles.container, isNew && { backgroundColor: '#E8F5E9' }]}
+      style={styles.container}
     >
       <View style={styles.avatarContainer}>
         <View style={[styles.avatar, { backgroundColor: getAvatarColor() }]}>
           <Text style={styles.avatarText}>{getInitials()}</Text>
         </View>
-        {/* Pill overlay on avatar bottom-right */}
-        {isNew && (
+        {/* Pill below avatar */}
+        {(isNew || isUpdated) && (
           <View style={styles.pillOverlay}>
-            <Text style={styles.pillText}>new</Text>
-          </View>
-        )}
-        {isUpdated && !isNew && (
-          <View style={styles.pillOverlay}>
-            <Ionicons name="refresh" size={10} color="#1976D2" />
-            <Text style={styles.pillText}>updated</Text>
+            <Text style={styles.pillText}>{isNew ? 'new' : 'updated'}</Text>
           </View>
         )}
       </View>
@@ -209,18 +191,21 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
     marginRight: 12,
+    overflow: 'visible',
+    minWidth: 70,
+    alignItems: 'center',
   },
   pillOverlay: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
+    bottom: -8,
+    alignSelf: 'center',
     backgroundColor: '#E3F2FD',
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     paddingVertical: 2,
     borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#BBDEFB',
     shadowColor: '#000',
@@ -228,12 +213,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
+    zIndex: 10,
   },
   pillText: {
     fontSize: 10,
     color: '#1976D2',
     fontWeight: '600',
     textTransform: 'uppercase',
+    flexShrink: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    width: undefined,
   },
   avatar: {
     width: 50,
