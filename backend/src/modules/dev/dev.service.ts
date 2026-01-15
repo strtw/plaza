@@ -14,6 +14,8 @@ const prisma = new PrismaClient();
 
 @Injectable()
 export class DevService {
+  private lastSimulationRun: Date | null = null;
+
   /**
    * Create mock users for the given contacts (phone + name)
    * Uses the actual contact name from the phone
@@ -111,15 +113,29 @@ export class DevService {
 
   /**
    * Simulate status changes for test users
-   * Runs every 5 minutes (if enabled via ENABLE_STATUS_SIMULATION env var)
-   * Only runs in non-production environments
+   * Runs at configurable interval (default 5 minutes, set via STATUS_SIMULATION_INTERVAL_MINUTES env var)
+   * Only runs if enabled via ENABLE_STATUS_SIMULATION env var
    */
-  @Cron('*/5 * * * *', { name: 'simulate-status-changes' })
+  @Cron('* * * * *', { name: 'simulate-status-changes' })
   async simulateStatusChanges() {
+    // Get interval from env var (default 5 minutes)
+    const intervalMinutes = parseInt(process.env.STATUS_SIMULATION_INTERVAL_MINUTES || '5', 10);
+    
+    // Check if enough time has passed since last run
+    const now = new Date();
+    if (this.lastSimulationRun) {
+      const timeSinceLastRun = now.getTime() - this.lastSimulationRun.getTime();
+      const intervalMs = intervalMinutes * 60 * 1000;
+      if (timeSinceLastRun < intervalMs) {
+        return; // Not enough time has passed
+      }
+    }
+
     // Debug logging
     console.log('[DevService] Cron job triggered', {
       NODE_ENV: process.env.NODE_ENV,
       ENABLE_STATUS_SIMULATION: process.env.ENABLE_STATUS_SIMULATION,
+      STATUS_SIMULATION_INTERVAL_MINUTES: intervalMinutes,
       timestamp: new Date().toISOString(),
     });
 
@@ -269,9 +285,13 @@ export class DevService {
       }
 
       console.log('[DevService] Status simulation completed');
+      
+      // Update last run time after successful execution
+      this.lastSimulationRun = now;
     } catch (error: any) {
       console.error('[DevService] Error in status simulation:', error);
       // Don't throw - we don't want cron job failures to crash the app
+      // Note: We don't update lastSimulationRun on error, so it will retry sooner
     }
   }
 }
