@@ -258,7 +258,10 @@ function ActivityScreenContent() {
   
   // Track displayed statuses (what user currently sees - frozen until refresh)
   const [displayedStatuses, setDisplayedStatuses] = useState<Array<any>>([]);
-  const bannerOpacity = useRef(new Animated.Value(0)).current;
+  // Initialize banner opacity to 1 (always visible) to prevent layout shifts
+  const bannerOpacity = useRef(new Animated.Value(1)).current;
+  // Pulse animation for when updates are detected
+  const bannerPulse = useRef(new Animated.Value(1)).current;
   const previousDisplayedStatusesRef = useRef<Array<any>>([]);
   const newOrChangedContactIdsRef = useRef<Set<string>>(new Set());
   
@@ -315,12 +318,19 @@ function ActivityScreenContent() {
 
     if (hasNewStatuses || hasRemovedStatuses || hasUpdatedStatuses) {
       setHasNewUpdates(true);
-      // Fade in banner
-      Animated.timing(bannerOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+      // Trigger subtle pulse animation when updates are detected
+      Animated.sequence([
+        Animated.timing(bannerPulse, {
+          toValue: 1.05,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bannerPulse, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statuses, displayedStatuses]);
@@ -441,13 +451,25 @@ function ActivityScreenContent() {
   // Check if form is ready to save (message, location, and endTime are set)
   const isFormReady = message.trim().length > 0 && location !== null && endTime !== null;
 
-  // Render update banner component with fade-in animation
+  // Render update banner component - always visible, text changes based on hasNewUpdates
   const renderUpdateBanner = () => {
-    if (!hasNewUpdates) return null;
+    // Always show banner to prevent layout shifts
     return (
-      <Animated.View style={[styles.updateBanner, { opacity: bannerOpacity }]}>
-        <Ionicons name="arrow-down" size={16} color="#007AFF" />
-        <Text style={styles.updateBannerText}>New updates! Pull down to refresh</Text>
+      <Animated.View 
+        style={[
+          styles.updateBanner, 
+          { 
+            opacity: bannerOpacity,
+            transform: [{ scale: bannerPulse }],
+          }
+        ]}
+      >
+        <Ionicons name={hasNewUpdates ? "arrow-down" : "radio"} size={16} color="#007AFF" />
+        <Text style={styles.updateBannerText}>
+          {hasNewUpdates 
+            ? "New updates! Pull down to refresh" 
+            : "Listening for status updates"}
+        </Text>
       </Animated.View>
     );
   };
@@ -618,12 +640,7 @@ function ActivityScreenContent() {
                   previousDisplayedStatusesRef.current = [...statuses];
                 }
                 setHasNewUpdates(false);
-                // Fade out banner
-                Animated.timing(bannerOpacity, {
-                  toValue: 0,
-                  duration: 200,
-                  useNativeDriver: true,
-                }).start();
+                // Banner stays visible, just text changes back to "listening"
               }, 50);
             }} 
           />
