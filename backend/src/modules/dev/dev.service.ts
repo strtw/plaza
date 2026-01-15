@@ -134,10 +134,12 @@ export class DevService {
     try {
       console.log('[DevService] Status simulation started');
 
-      // Find the primary user (you) by clerkId
-      const primaryUser = await prisma.user.findUnique({
+      // Find the primary user (you) by clerkId starting with 'user_'
+      const primaryUser = await prisma.user.findFirst({
         where: {
-          clerkId: 'user_',
+          clerkId: {
+            startsWith: 'user_',
+          },
         },
         select: {
           id: true,
@@ -146,7 +148,7 @@ export class DevService {
       });
 
       if (!primaryUser) {
-        console.log('[DevService] Primary user (clerkId: "user_") not found for status simulation');
+        console.log('[DevService] Primary user (clerkId starting with "user_") not found for status simulation');
         return;
       }
 
