@@ -11,19 +11,31 @@ export class StatusService {
     try {
       const now = new Date();
       
-      console.log('[StatusService] Creating status for userId:', userId);
+      console.log('[StatusService] Creating/updating status for userId:', userId);
       console.log('[StatusService] DTO:', JSON.stringify(dto, null, 2));
       
-      // Delete ALL statuses for this user before creating new one (ensures only one status exists)
+      // Check if user has existing ACTIVE status (within time window)
+      const existingStatus = await prisma.status.findFirst({
+        where: {
+          userId,
+          startTime: { lte: now },
+          endTime: { gte: now },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Clean up any expired statuses for this user (maintains one-status-per-user rule)
       const deletedCount = await prisma.status.deleteMany({
         where: {
           userId,
+          endTime: { lt: now },
         },
       });
-      console.log('[StatusService] Deleted', deletedCount.count, 'existing statuses for user');
+      if (deletedCount.count > 0) {
+        console.log('[StatusService] Deleted', deletedCount.count, 'expired statuses for user');
+      }
       
       const statusData = {
-        userId,
         status: dto.status as AvailabilityStatus,
         message: dto.message,
         location: dto.location as StatusLocation,
@@ -31,13 +43,22 @@ export class StatusService {
         endTime: new Date(dto.endTime),
       };
       
-      console.log('[StatusService] Creating status with data:', JSON.stringify(statusData, null, 2));
-      
-      return await prisma.status.create({
-        data: statusData,
-      });
+      if (existingStatus) {
+        // UPDATE existing active status (preserves id and createdAt, updates updatedAt)
+        console.log('[StatusService] Updating existing status with id:', existingStatus.id);
+        return await prisma.status.update({
+          where: { id: existingStatus.id },
+          data: statusData,
+        });
+      } else {
+        // CREATE new status (no active status exists)
+        console.log('[StatusService] Creating new status');
+        return await prisma.status.create({
+          data: { userId, ...statusData },
+        });
+      }
     } catch (error: any) {
-      console.error('[StatusService] Error creating status:', error);
+      console.error('[StatusService] Error creating/updating status:', error);
       console.error('[StatusService] Error details:', {
         message: error?.message,
         code: error?.code,

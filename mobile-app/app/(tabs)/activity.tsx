@@ -13,6 +13,7 @@ import { useUserStore } from '../../stores/userStore';
 
 // Animated wrapper component for new contact items (fade in with opacity pulse)
 const AnimatedContactListItem = ({ contact }: { contact: any }) => {
+  // Extract isNew and isUpdated from contact for passing to ContactListItem
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -45,7 +46,11 @@ const AnimatedContactListItem = ({ contact }: { contact: any }) => {
         opacity: Animated.multiply(fadeAnim, pulseAnim), // Combine fade and pulse
       }}
     >
-      <ContactListItem contact={contact} isNew={true} />
+      <ContactListItem 
+        contact={contact}
+        isNew={contact.isNew}
+        isUpdated={contact.isUpdated}
+      />
     </Animated.View>
   );
 };
@@ -295,7 +300,8 @@ function ActivityScreenContent() {
   useEffect(() => {
     if (statuses && displayedStatuses.length === 0) {
       setDisplayedStatuses(statuses);
-      previousDisplayedStatusesRef.current = [...statuses];
+      // Don't set previousDisplayedStatusesRef on initial load - keep it empty
+      // This ensures no badges show on first load, only after refresh
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statuses]);
@@ -402,15 +408,40 @@ function ActivityScreenContent() {
   // Merge contacts with their statuses (use displayedStatuses to keep list frozen until refresh)
   // Memoize to prevent recomputation when statuses (polling) updates
   const contactsWithStatus = useMemo(() => {
+    // Check if we have previous state to compare against (not on initial load)
+    const hasPreviousState = previousDisplayedStatusesRef.current.length > 0;
+    
+    // Map previous statuses by status.id (stable after backend UPDATE change)
+    const previousStatusMap = hasPreviousState
+      ? new Map(previousDisplayedStatusesRef.current.map((s: any) => [s.id, s]))
+      : new Map();
+
     return contacts?.map((contact: any) => {
       const contactId = String(contact.id);
+      const status = displayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id);
+      
+      // Determine if new or updated (only if we have previous state)
+      let isNew = false;
+      let isUpdated = false;
+      
+      if (hasPreviousState && status) {
+        const previousStatus = previousStatusMap.get(status.id);
+        isNew = !previousStatus; // Status didn't exist in previous
+        isUpdated = previousStatus !== undefined && 
+          previousStatus.updatedAt !== status.updatedAt; // Status existed but updatedAt changed
+      }
+      
+      // Keep existing flags for sorting/animations
       const isNewOrChanged = newOrChangedContactIdsRef.current.has(contactId);
-      const isNewOnly = newOnlyIdsRef.current.has(contactId); // Only truly new items pulse
+      const isNewOnly = newOnlyIdsRef.current.has(contactId);
+      
       return {
         ...contact,
-        status: displayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id),
-        isNewOrChanged: isNewOrChanged,
-        isNewOnly: isNewOnly, // Only truly new items (not just changed)
+        status,
+        isNewOrChanged,
+        isNewOnly,
+        isNew, // For pill display
+        isUpdated, // For pill display
       };
     }) || [];
   }, [contacts, displayedStatuses]);
@@ -606,7 +637,11 @@ function ActivityScreenContent() {
               {item.isNewOrChanged ? (
                 <AnimatedContactListItem contact={item} />
               ) : (
-                <ContactListItem contact={item} />
+                <ContactListItem 
+                  contact={item} 
+                  isNew={item.isNew}
+                  isUpdated={item.isUpdated}
+                />
               )}
             </>
           );
@@ -626,43 +661,30 @@ function ActivityScreenContent() {
               // This is the ONLY place where displayedStatuses should be updated after initial load
               setTimeout(() => {
                 if (statuses) {
-                  // Detect new or changed statuses before updating
-                  const currentStatusIds = new Set(statuses.map((s: any) => s.user?.id || s.userId));
-                  const previousStatusIds = new Set(previousDisplayedStatusesRef.current.map((s: any) => s.user?.id || s.userId));
+                  // Map previous statuses by status.id (stable after backend UPDATE change)
+                  const previousStatusMap = new Map(
+                    previousDisplayedStatusesRef.current.map((s: any) => [s.id, s])
+                  );
                   
-                  // Find new statuses (not in previous) - these will pulse
+                  // Find new statuses (status.id doesn't exist in previous) - these will pulse
                   const newStatusIds = new Set<string>(
                     statuses
-                      .filter((s: any) => {
-                        const statusId = s.user?.id || s.userId;
-                        return !previousDisplayedStatusesRef.current.some((prev: any) => {
-                          const prevId = prev.user?.id || prev.userId;
-                          return prevId === statusId;
-                        });
-                      })
+                      .filter((s: any) => !previousStatusMap.has(s.id))
                       .map((s: any) => String(s.user?.id || s.userId))
                   );
                   
-                  // Find changed statuses (same ID but different content) - these won't pulse
+                  // Find changed statuses (same status.id but updatedAt changed) - these will also pulse
                   const changedStatusIds = new Set<string>(
                     statuses
                       .filter((current: any) => {
-                        const currentId = current.user?.id || current.userId;
-                        const previous = previousDisplayedStatusesRef.current.find((p: any) => {
-                          const prevId = p.user?.id || p.userId;
-                          return prevId === currentId;
-                        });
+                        const previous = previousStatusMap.get(current.id);
                         if (!previous) return false;
-                        return (
-                          previous.message !== current.message ||
-                          previous.location !== current.location ||
-                          previous.endTime !== current.endTime
-                        );
+                        return previous.updatedAt !== current.updatedAt;
                       })
                       .map((s: any) => String(s.user?.id || s.userId))
                   );
                   
-                  // Store all (new + changed) for sorting to top
+                  // Store all (new + changed) for sorting to top and animations
                   newOrChangedContactIdsRef.current = new Set<string>([
                     ...Array.from(newStatusIds),
                     ...Array.from(changedStatusIds),
@@ -692,7 +714,7 @@ function ActivityScreenContent() {
                     newOnlyIdsRef.current.clear();
                   }, 500);
                   
-                  // Update previous ref for next comparison
+                  // Update previous ref for next comparison (store by status.id for matching)
                   previousDisplayedStatusesRef.current = [...statuses];
                 }
                 setHasNewUpdates(false);

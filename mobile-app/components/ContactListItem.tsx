@@ -7,9 +7,10 @@ import { useState, useEffect } from 'react';
 interface Props {
   contact: Contact;
   isNew?: boolean; // Optional prop to indicate if this is a new/updated item
+  isUpdated?: boolean; // Optional prop to indicate if this is an updated/changed item
 }
 
-export function ContactListItem({ contact, isNew = false }: Props) {
+export function ContactListItem({ contact, isNew = false, isUpdated = false }: Props) {
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -136,6 +137,18 @@ export function ContactListItem({ contact, isNew = false }: Props) {
         <View style={[styles.avatar, { backgroundColor: getAvatarColor() }]}>
           <Text style={styles.avatarText}>{getInitials()}</Text>
         </View>
+        {/* Pill overlay on avatar bottom-right */}
+        {isNew && (
+          <View style={styles.pillOverlay}>
+            <Text style={styles.pillText}>new</Text>
+          </View>
+        )}
+        {isUpdated && !isNew && (
+          <View style={styles.pillOverlay}>
+            <Ionicons name="refresh" size={10} color="#1976D2" />
+            <Text style={styles.pillText}>updated</Text>
+          </View>
+        )}
       </View>
       <View style={styles.content}>
         <View style={styles.nameRow}>
@@ -184,6 +197,31 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
     marginRight: 12,
+  },
+  pillOverlay: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#BBDEFB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  pillText: {
+    fontSize: 10,
+    color: '#1976D2',
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   avatar: {
     width: 50,
