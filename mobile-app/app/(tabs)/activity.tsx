@@ -12,7 +12,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUserStore } from '../../stores/userStore';
 
 // Animated wrapper component for new contact items (fade in with opacity pulse)
-const AnimatedContactListItem = ({ contact }: { contact: any }) => {
+const AnimatedContactListItem = ({ contact, previousStatus }: { contact: any; previousStatus?: any }) => {
   // Extract isNew and isUpdated from contact for passing to ContactListItem
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -50,6 +50,7 @@ const AnimatedContactListItem = ({ contact }: { contact: any }) => {
         contact={contact}
         isNew={contact.isNew}
         isUpdated={contact.isUpdated}
+        previousStatus={previousStatus || contact.previousStatus}
       />
     </Animated.View>
   );
@@ -517,6 +518,11 @@ function ActivityScreenContent() {
       const isNewOrChanged = newOrChangedContactIdsRef.current.has(contactId);
       const isNewOnly = newOnlyIdsRef.current.has(contactId);
       
+      // Get previous status for comparison (only if updated)
+      const previousStatus = hasPreviousState && status && isUpdated
+        ? previousStatusMap.get(status.id)
+        : undefined;
+
       const result = {
         ...contact,
         status,
@@ -524,6 +530,7 @@ function ActivityScreenContent() {
         isNewOnly,
         isNew, // For pill display
         isUpdated, // For pill display
+        previousStatus, // Previous status data for comparison display
       };
       
       // Debug logging (can be removed in production)
@@ -721,6 +728,7 @@ function ActivityScreenContent() {
               contact={item} 
               isNew={item.isNew}
               isUpdated={item.isUpdated}
+              previousStatus={item.previousStatus}
             />
           );
         }}

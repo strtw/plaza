@@ -8,9 +8,10 @@ interface Props {
   contact: Contact;
   isNew?: boolean; // Optional prop to indicate if this is a new/updated item
   isUpdated?: boolean; // Optional prop to indicate if this is an updated/changed item
+  previousStatus?: any; // Previous status data for comparison (only when isUpdated is true)
 }
 
-export function ContactListItem({ contact, isNew = false, isUpdated = false }: Props) {
+export function ContactListItem({ contact, isNew = false, isUpdated = false, previousStatus }: Props) {
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -128,9 +129,22 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false }: P
 
   const locationIcon = getLocationIcon();
 
+  const handlePress = () => {
+    const params: any = {};
+    if (isUpdated && previousStatus) {
+      // Pass previous status data as query params for comparison display
+      params.isUpdated = 'true';
+      params.previousStatus = JSON.stringify(previousStatus);
+    }
+    const queryString = Object.keys(params).length > 0 
+      ? '?' + Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v as string)}`).join('&')
+      : '';
+    router.push(`/contact/${contact.id}${queryString}`);
+  };
+
   return (
     <Pressable
-      onPress={() => router.push(`/contact/${contact.id}`)}
+      onPress={handlePress}
       style={styles.container}
     >
       <View style={styles.avatarContainer}>
