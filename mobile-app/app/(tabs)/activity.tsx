@@ -88,6 +88,15 @@ const mapBackendToFrontendLocation = (location: StatusLocation): 'home' | 'green
   return map[location] || null;
 };
 
+// Module-level storage to persist state across component remounts
+// This ensures pills persist when navigating back from contact detail screen
+const persistentState = {
+  displayedStatuses: [] as Array<any>,
+  previousDisplayedStatuses: [] as Array<any>,
+  hasInitialized: false,
+};
+
+
 function ActivityScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const api = createApi(getToken);
@@ -315,7 +324,10 @@ function ActivityScreenContent() {
    * will NOT get pills because they exist in both the old and new state with the same updatedAt.
    */
   // Track displayed statuses (what user currently sees - frozen until refresh)
-  const [displayedStatuses, setDisplayedStatuses] = useState<Array<any>>([]);
+  // Initialize displayedStatuses from persistent storage if available (survives remounts)
+  const [displayedStatuses, setDisplayedStatuses] = useState<Array<any>>(
+    persistentState.hasInitialized ? persistentState.displayedStatuses : []
+  );
   // Initialize banner opacity to 1 (always visible) to prevent layout shifts
   const bannerOpacity = useRef(new Animated.Value(1)).current;
   // Pulse animation for when updates are detected
@@ -323,7 +335,7 @@ function ActivityScreenContent() {
   // Ref to store previous displayedStatuses for comparison (to detect new/updated items)
   // This represents the baseline that the user saw BEFORE the last refresh
   // Updated in refresh handler BEFORE displayedStatuses changes
-  const previousDisplayedStatusesRef = useRef<Array<any>>([]);
+  const previousDisplayedStatusesRef = useRef<Array<any>>(persistentState.previousDisplayedStatuses);
   const newOrChangedContactIdsRef = useRef<Set<string>>(new Set());
   const newOnlyIdsRef = useRef<Set<string>>(new Set()); // Track only truly new items for pulse
   
@@ -332,15 +344,39 @@ function ActivityScreenContent() {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
 
-  // Initialize displayedStatuses when statuses first load
+  // Initialize displayedStatuses from persistent storage or from statuses
+  // This ensures state persists across component remounts (navigation)
   useEffect(() => {
-    if (statuses && displayedStatuses.length === 0) {
-      setDisplayedStatuses(statuses);
-      // Don't set previousDisplayedStatusesRef on initial load - keep it empty
-      // This ensures no badges show on first load, only after refresh
+    if (statuses) {
+      if (!persistentState.hasInitialized) {
+        // First time initialization
+        persistentState.displayedStatuses = statuses;
+        setDisplayedStatuses(statuses);
+        persistentState.hasInitialized = true;
+        // Don't set previousDisplayedStatusesRef on initial load - keep it empty
+        // This ensures no badges show on first load, only after refresh
+      } else {
+        // Restore from persistent storage if component remounted
+        if (displayedStatuses.length === 0 && persistentState.displayedStatuses.length > 0) {
+          setDisplayedStatuses([...persistentState.displayedStatuses]);
+        }
+        if (previousDisplayedStatusesRef.current.length === 0 && persistentState.previousDisplayedStatuses.length > 0) {
+          previousDisplayedStatusesRef.current = [...persistentState.previousDisplayedStatuses];
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statuses]);
+
+  // Keep persistent storage in sync with state
+  useEffect(() => {
+    if (displayedStatuses.length > 0) {
+      persistentState.displayedStatuses = displayedStatuses;
+    }
+    if (previousDisplayedStatusesRef.current.length > 0) {
+      persistentState.previousDisplayedStatuses = previousDisplayedStatusesRef.current;
+    }
+  }, [displayedStatuses]);
 
   // Update current time every minute
   useEffect(() => {
@@ -441,12 +477,24 @@ function ActivityScreenContent() {
     return '<1m';
   };
   
+  // Restore previousDisplayedStatusesRef BEFORE calculating contactsWithStatus to ensure pills persist
+  // This ensures the ref is restored synchronously before the memo runs (refs can be updated synchronously)
+  // CRITICAL: Pills are ONLY cleared when user pulls to refresh (refresh handler updates previousDisplayedStatusesRef)
+  // Use persistent storage that survives component remounts
+  if (persistentState.hasInitialized) {
+    if (previousDisplayedStatusesRef.current.length === 0 && persistentState.previousDisplayedStatuses.length > 0) {
+      // Restore synchronously - refs can be updated during render
+      previousDisplayedStatusesRef.current = [...persistentState.previousDisplayedStatuses];
+    }
+  }
+
   // Merge contacts with their statuses (use displayedStatuses to keep list frozen until refresh)
   // Memoize to prevent recomputation when statuses (polling) updates
   const contactsWithStatus = useMemo(() => {
     // Check if we have previous state to compare against (not on initial load)
     // On initial load: previousDisplayedStatusesRef is empty → no pills shown (user hasn't seen anything yet)
     // After first refresh: previousDisplayedStatusesRef contains the baseline → comparison starts working
+    // CRITICAL: Pills are ONLY cleared when user pulls to refresh (refresh handler updates previousDisplayedStatusesRef)
     const hasPreviousState = previousDisplayedStatusesRef.current.length > 0;
     
     // Debug logging (can be removed in production)
@@ -802,13 +850,19 @@ function ActivityScreenContent() {
                   // it will compare the NEW displayedStatuses against this OLD baseline
                   // Result: Items that were already visible and unchanged will NOT get pills
                   // Only items that are NEW (didn't exist) or UPDATED (updatedAt changed) will get pills
+                  // IMPORTANT: This is the ONLY place where previousDisplayedStatusesRef should be updated
+                  // Pills are cleared here because this is the explicit pull-to-refresh action
                   previousDisplayedStatusesRef.current = [...currentDisplayed];
+                  persistentState.previousDisplayedStatuses = [...currentDisplayed]; // Persist in module storage
                   
                   // Update displayed statuses with fresh data from API
                   // This triggers contactsWithStatus memo to recalculate
                   // The memo will compare new displayedStatuses against previousDisplayedStatusesRef (old baseline)
                   // to determine which items should show "new" or "updated" pills
-                  setDisplayedStatuses([...statuses]);
+                  // IMPORTANT: This is the ONLY place where displayedStatuses should be updated after initial load
+                  const newDisplayedStatuses = [...statuses];
+                  setDisplayedStatuses(newDisplayedStatuses);
+                  persistentState.displayedStatuses = newDisplayedStatuses; // Persist in module storage
                   
                   // Clear the new/changed flags after animation completes
                   setTimeout(() => {
