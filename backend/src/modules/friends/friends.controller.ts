@@ -38,8 +38,36 @@ export class FriendsController {
     }
   }
 
-  @Post(':id/mute')
-  async muteFriend(@Request() req, @Param('id') friendUserId: string) {
+  @Get('pending')
+  async getPendingFriends(@Request() req) {
+    try {
+      // Look up Plaza user by Clerk ID
+      const user = await prisma.user.findUnique({
+        where: { clerkId: req.userId },
+        select: { id: true },
+      });
+
+      if (!user) {
+        throw new HttpException('User not found. Please ensure the user exists in the database.', HttpStatus.NOT_FOUND);
+      }
+
+      return this.friendsService.getPendingFriends(user.id);
+    } catch (error: any) {
+      console.error('[FriendsController] Error in getPendingFriends:', error);
+      
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      throw new HttpException(
+        error?.message || 'Internal server error',
+        error?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post(':sharerId/accept')
+  async acceptFriend(@Request() req, @Param('sharerId') sharerId: string) {
     try {
       const user = await prisma.user.findUnique({
         where: { clerkId: req.userId },
@@ -50,7 +78,35 @@ export class FriendsController {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
 
-      return this.friendsService.muteFriend(user.id, friendUserId);
+      return this.friendsService.acceptFriend(user.id, sharerId);
+    } catch (error: any) {
+      console.error('[FriendsController] Error accepting friend:', error);
+      
+      // Handle expiration error specifically
+      if (error.message === 'This invitation has expired') {
+        throw new HttpException('This invitation has expired', HttpStatus.NOT_FOUND);
+      }
+      
+      throw new HttpException(
+        error?.message || 'Failed to accept friend',
+        error?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post(':sharerId/mute')
+  async muteFriend(@Request() req, @Param('sharerId') sharerId: string) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { clerkId: req.userId },
+        select: { id: true },
+      });
+
+      if (!user) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
+
+      return this.friendsService.muteFriend(user.id, sharerId);
     } catch (error: any) {
       console.error('[FriendsController] Error muting friend:', error);
       throw new HttpException(
@@ -60,8 +116,8 @@ export class FriendsController {
     }
   }
 
-  @Post(':id/block')
-  async blockFriend(@Request() req, @Param('id') friendUserId: string) {
+  @Post(':sharerId/block')
+  async blockFriend(@Request() req, @Param('sharerId') sharerId: string) {
     try {
       const user = await prisma.user.findUnique({
         where: { clerkId: req.userId },
@@ -72,7 +128,7 @@ export class FriendsController {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
 
-      return this.friendsService.blockFriend(user.id, friendUserId);
+      return this.friendsService.blockFriend(user.id, sharerId);
     } catch (error: any) {
       console.error('[FriendsController] Error blocking friend:', error);
       throw new HttpException(

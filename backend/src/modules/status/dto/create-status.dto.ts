@@ -1,4 +1,4 @@
-import { IsEnum, IsString, IsISO8601 } from 'class-validator';
+import { IsEnum, IsString, IsISO8601, IsArray, IsOptional, ArrayMaxSize, IsUUID } from 'class-validator';
 
 export enum AvailabilityStatus {
   AVAILABLE = 'AVAILABLE',
@@ -26,5 +26,11 @@ export class CreateStatusDto {
 
   @IsISO8601()
   endTime: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100, { message: 'Maximum 100 recipients allowed per status' })
+  @IsUUID('4', { each: true, message: 'Each recipient ID must be a valid UUID' })
+  sharedWith?: string[];
 }
 

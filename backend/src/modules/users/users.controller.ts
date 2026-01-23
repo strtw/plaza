@@ -1,7 +1,10 @@
-import { Controller, Get, Post, Delete, UseGuards, Request, Body, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, UseGuards, Request, Body, Query, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { clerkClient } from '@clerk/clerk-sdk-node';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 @Controller('users')
 @UseGuards(AuthGuard)
@@ -85,6 +88,40 @@ export class UsersController {
       lastName: user.lastName,
       email: user.email,
     };
+  }
+
+  /**
+   * Search for users by name or email
+   * Excludes users who have blocked the current user
+   */
+  @Get('search')
+  async searchUsers(@Request() req, @Query('q') query: string) {
+    try {
+      const clerkId = req.userId;
+
+      // Get Plaza user ID
+      const user = await prisma.user.findUnique({
+        where: { clerkId },
+        select: { id: true },
+      });
+
+      if (!user) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
+
+      return this.usersService.searchUsers(user.id, query || '');
+    } catch (error: any) {
+      console.error('[UsersController] Error searching users:', error);
+      
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      throw new HttpException(
+        error?.message || 'Failed to search users',
+        error?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   /**

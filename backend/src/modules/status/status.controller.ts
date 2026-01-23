@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Body, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, UseGuards, Request, Query, HttpException, HttpStatus } from '@nestjs/common';
 import { StatusService } from './status.service';
 import { CreateStatusDto } from './dto/create-status.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -75,10 +75,11 @@ export class StatusController {
   }
 
   @Get('friends')
-  async getFriendsStatuses(@Request() req) {
+  async getFriendsStatuses(@Request() req, @Query('includeMuted') includeMuted?: string) {
     try {
       const databaseUserId = await this.getDatabaseUserId(req.userId);
-      return await this.statusService.getFriendsStatuses(databaseUserId);
+      const includeMutedBool = includeMuted === 'true';
+      return await this.statusService.getFriendsStatuses(databaseUserId, includeMutedBool);
     } catch (error: any) {
       console.error('Error in getFriendsStatuses controller:', error);
       // Return empty array instead of throwing to prevent 500 errors

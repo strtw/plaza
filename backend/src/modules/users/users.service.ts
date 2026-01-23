@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, FriendStatus } from '@prisma/client';
 import { hashPhone } from '../../common/utils/phone-hash.util';
 
 const prisma = new PrismaClient();
@@ -106,6 +106,57 @@ export class UsersService {
         return false;
       }
       throw error;
+    }
+  }
+
+  /**
+   * Search users by name or email
+   * Excludes users who have blocked the current user
+   */
+  async searchUsers(userId: string, query: string) {
+    try {
+      if (!query || query.trim().length === 0) {
+        return [];
+      }
+
+      const searchTerm = query.trim().toLowerCase();
+
+      // Query Friend records where friendUserId=currentUser AND status=BLOCKED
+      // These are users who have blocked the current user
+      const blockedFriends = await prisma.friend.findMany({
+        where: {
+          friendUserId: userId, // Current user is the recipient
+          status: FriendStatus.BLOCKED,
+        },
+        select: { userId: true }, // Get the userId values (users who blocked current user)
+      });
+
+      const blockedUserIds = new Set(blockedFriends.map(f => f.userId));
+
+      // Search users by firstName, lastName, or email (case-insensitive, partial match)
+      const users = await prisma.user.findMany({
+        where: {
+          OR: [
+            { firstName: { contains: searchTerm, mode: 'insensitive' } },
+            { lastName: { contains: searchTerm, mode: 'insensitive' } },
+            { email: { contains: searchTerm, mode: 'insensitive' } },
+          ],
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      });
+
+      // Filter out blocked users
+      const filteredUsers = users.filter(user => !blockedUserIds.has(user.id));
+
+      return filteredUsers;
+    } catch (error: any) {
+      console.error('[UsersService] Error searching users:', error);
+      return [];
     }
   }
 }

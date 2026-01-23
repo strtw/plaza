@@ -14,6 +14,35 @@ export class StatusService {
       console.log('[StatusService] Creating/updating status for userId:', userId);
       console.log('[StatusService] DTO:', JSON.stringify(dto, null, 2));
       
+      // Filter out blocked users from sharedWith array
+      let filteredSharedWith: string[] = [];
+      if (dto.sharedWith && dto.sharedWith.length > 0) {
+        // Query Friend records where friendUserId=currentUser AND status=BLOCKED
+        // These are users who have blocked the current user
+        const blockedFriends = await prisma.friend.findMany({
+          where: {
+            friendUserId: userId, // Current user is the recipient
+            status: FriendStatus.BLOCKED,
+          },
+          select: { userId: true }, // Get the userId values (users who blocked current user)
+        });
+
+        const blockedUserIds = new Set(blockedFriends.map(f => f.userId));
+        
+        // Filter out blocked users from sharedWith array (silently exclude)
+        filteredSharedWith = dto.sharedWith.filter(id => !blockedUserIds.has(id));
+        
+        if (filteredSharedWith.length < dto.sharedWith.length) {
+          console.log(`[StatusService] Filtered out ${dto.sharedWith.length - filteredSharedWith.length} blocked users from sharedWith`);
+        }
+      }
+
+      // Enforce maximum 100 recipients limit
+      if (filteredSharedWith.length > 100) {
+        filteredSharedWith = filteredSharedWith.slice(0, 100);
+        console.log('[StatusService] Limited sharedWith to 100 recipients');
+      }
+      
       // Check if user has existing ACTIVE status (within time window)
       const existingStatus = await prisma.status.findFirst({
         where: {
@@ -41,6 +70,7 @@ export class StatusService {
         location: dto.location as StatusLocation,
         startTime: new Date(dto.startTime),
         endTime: new Date(dto.endTime),
+        sharedWith: filteredSharedWith, // Store filtered sharedWith array
       };
       
       if (existingStatus) {
@@ -52,6 +82,7 @@ export class StatusService {
         });
       } else {
         // CREATE new status (no active status exists)
+        // Important: Do NOT create Friend records when sharing statuses
         console.log('[StatusService] Creating new status');
         return await prisma.status.create({
           data: { userId, ...statusData },
@@ -87,7 +118,7 @@ export class StatusService {
     }
   }
 
-  async getFriendsStatuses(userId: string) {
+  async getFriendsStatuses(userId: string, includeMuted: boolean = false) {
     try {
       // Validate userId
       if (!userId) {
@@ -97,10 +128,17 @@ export class StatusService {
 
       // Query Friend table where friendUserId = current user (people who added current user)
       // User A adds User B → User B sees User A's status
+      // Default: only ACCEPTED friends
+      // With includeMuted: ACCEPTED or MUTED friends
+      // Never show PENDING or BLOCKED
+      const statusFilter = includeMuted 
+        ? [FriendStatus.ACCEPTED, FriendStatus.MUTED]
+        : [FriendStatus.ACCEPTED];
+
       const friends = await prisma.friend.findMany({
         where: { 
           friendUserId: userId,  // People who added current user
-          status: FriendStatus.ACCEPTED,
+          status: { in: statusFilter },
         },
         select: { userId: true }, // Get the userId values (people who added current user)
       });
