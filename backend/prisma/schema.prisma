@@ -17,10 +17,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  statuses       Status[]
-  invitesCreated Invite[] @relation("InviteCreator")
-  invitesUsed    Invite[] @relation("InviteUser")
-  friends        Friend[] @relation("UserFriends")
+  statuses        Status[]
+  invitesCreated  Invite[] @relation("InviteCreator")
+  invitesUsed     Invite[] @relation("InviteUser")
+  friends         Friend[] @relation("UserFriends")
   friendsAsFriend Friend[] @relation("FriendUser")
 
   @@index([phoneHash])
@@ -30,23 +30,28 @@ enum FriendStatus {
   ACTIVE
   MUTED
   BLOCKED
+  PENDING
+  ACCEPTED
 }
 
 model Status {
-  id        String             @id @default(uuid())
-  userId    String
-  status    AvailabilityStatus
-  message   String
-  location  StatusLocation
-  startTime DateTime
-  endTime   DateTime
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  id         String             @id @default(uuid())
+  userId     String
+  status     AvailabilityStatus
+  message    String
+  location   StatusLocation
+  startTime  DateTime
+  endTime    DateTime
+  sharedWith String[]           @default([]) // Array of user IDs who receive this status
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  acceptedByFriends Friend[] @relation("AcceptedFromStatus")
 
   @@index([userId])
   @@index([startTime, endTime])
+  @@index([sharedWith], type: Gin)
 }
 
 enum AvailabilityStatus {
@@ -77,15 +82,17 @@ model Invite {
 }
 
 model Friend {
-  id          String      @id @default(uuid())
-  userId      String      // User who added this friend
-  friendUserId String     // The Plaza user they added
-  status      FriendStatus @default(ACTIVE)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                   String       @id @default(uuid())
+  userId               String // User who added this friend
+  friendUserId         String // The Plaza user they added
+  status               FriendStatus @default(ACCEPTED)
+  acceptedFromStatusId String? // Status ID that triggered acceptance (nullable)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
-  user       User @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
-  friendUser User @relation("FriendUser", fields: [friendUserId], references: [id], onDelete: Cascade)
+  user               User    @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friendUser         User    @relation("FriendUser", fields: [friendUserId], references: [id], onDelete: Cascade)
+  acceptedFromStatus Status? @relation("AcceptedFromStatus", fields: [acceptedFromStatusId], references: [id])
 
   @@unique([userId, friendUserId])
   @@index([userId])
