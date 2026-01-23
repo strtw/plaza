@@ -85,7 +85,11 @@ export const createApi = (getToken: () => Promise<string | null>) => {
         body: JSON.stringify({ firstName, lastName }),
       }),
     getContacts: () => fetchApi('/friends'),
-    getFriendsStatuses: () => fetchApi('/status/friends'),
+    getPendingFriends: () => fetchApi('/friends/pending'),
+    getFriendsStatuses: (includeMuted?: boolean) => {
+      const url = includeMuted ? '/status/friends?includeMuted=true' : '/status/friends';
+      return fetchApi(url);
+    },
     getMyStatus: () => fetchApi('/status/me'),
     createStatus: (data: any) =>
       fetchApi('/status', {
@@ -124,12 +128,16 @@ export const createApi = (getToken: () => Promise<string | null>) => {
         body: JSON.stringify({ contacts }),
       }),
     // Friends endpoints
-    muteFriend: (friendId: string) =>
-      fetchApi(`/friends/${friendId}/mute`, {
+    acceptFriend: (sharerId: string) =>
+      fetchApi(`/friends/${sharerId}/accept`, {
         method: 'POST',
       }),
-    blockFriend: (friendId: string) =>
-      fetchApi(`/friends/${friendId}/block`, {
+    muteFriend: (sharerId: string) =>
+      fetchApi(`/friends/${sharerId}/mute`, {
+        method: 'POST',
+      }),
+    blockFriend: (sharerId: string) =>
+      fetchApi(`/friends/${sharerId}/block`, {
         method: 'POST',
       }),
     unmuteFriend: (friendId: string) =>
@@ -140,6 +148,8 @@ export const createApi = (getToken: () => Promise<string | null>) => {
       fetchApi(`/friends/${friendId}/unblock`, {
         method: 'POST',
       }),
+    searchUsers: (query: string) =>
+      fetchApi(`/users/search?q=${encodeURIComponent(query)}`),
     deleteAccount: () =>
       fetchApi('/users/me', {
         method: 'DELETE',

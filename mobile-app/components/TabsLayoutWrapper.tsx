@@ -1,11 +1,16 @@
 import { Slot, useRouter, usePathname, useSegments } from 'expo-router';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@clerk/clerk-expo';
+import { createApi } from '../lib/api';
 
 export function TabsLayoutWrapper() {
   const router = useRouter();
   const pathname = usePathname();
   const segments = useSegments();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const api = createApi(getToken);
   
   // Determine initial active tab from pathname
   const getInitialTab = (): 'activity' | 'contacts' | 'profile' => {
@@ -16,6 +21,16 @@ export function TabsLayoutWrapper() {
   };
   
   const [activeTab, setActiveTab] = useState<'activity' | 'contacts' | 'profile'>(getInitialTab);
+  
+  // Query pending friends for badge count
+  const { data: pendingFriends = [] } = useQuery({
+    queryKey: ['pending-friends'],
+    queryFn: api.getPendingFriends,
+    enabled: isLoaded && isSignedIn,
+    refetchInterval: 30000, // Poll every 30 seconds
+  });
+  
+  const pendingCount = (pendingFriends as any[]).length;
   
   // Sync activeTab with pathname changes
   useEffect(() => {
@@ -52,9 +67,18 @@ export function TabsLayoutWrapper() {
             router.push('/(tabs)/contacts');
           }}
         >
-          <Text style={[styles.tabText, activeTab === 'contacts' ? styles.activeTabText : null]}>
-            Contacts
-          </Text>
+          <View style={{ position: 'relative' }}>
+            <Text style={[styles.tabText, activeTab === 'contacts' ? styles.activeTabText : null]}>
+              Contacts
+            </Text>
+            {pendingCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {pendingCount > 99 ? '99+' : pendingCount}
+                </Text>
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'profile' ? styles.activeTab : null]}
@@ -95,6 +119,25 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: '#007AFF',
+    fontWeight: '600',
+  },
+  badge: {
+    position: 'absolute',
+    top: -8,
+    right: -12,
+    backgroundColor: '#FF3B30',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 11,
     fontWeight: '600',
   },
 });

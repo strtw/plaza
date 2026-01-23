@@ -43,6 +43,9 @@ export function getFullName(user: User): string {
 
 export interface Contact extends User {
   status?: ContactStatus;
+  relationshipType?: 'outgoing' | 'incoming' | 'mutual';
+  isPending?: boolean;
+  pendingStatus?: any;
 }
 
 export interface ContactStatus {
