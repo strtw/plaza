@@ -171,6 +171,15 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false, pre
             )}
           </View>
           <View style={styles.rightIcons}>
+            {/* Mute bell icon for muted users - positioned left of time remaining */}
+            {contact.friendStatus === 'MUTED' && (
+              <Ionicons 
+                name="notifications-off" 
+                size={16} 
+                color="#999" 
+                style={styles.muteIcon}
+              />
+            )}
             {/* Time remaining bubble - positioned left of location icon */}
             {contact.status && !isStatusExpiredOrExpiringSoon() && (
               <View style={[styles.timeBubble, { backgroundColor: getStatusColor() }]}>
@@ -292,6 +301,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#fff',
+  },
+  muteIcon: {
+    // No margin needed, gap handles spacing
   },
   locationIcon: {
     // No margin needed, gap handles spacing

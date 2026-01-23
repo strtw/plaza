@@ -896,7 +896,8 @@ function ActivityScreenContent() {
       // Check if contact is muted (either from friendStatus or local state)
       const isMuted = contact.friendStatus === 'MUTED' || locallyMutedContacts.has(contact.id);
       
-      // If muted, only show if showMuted toggle is on
+      // When showMuted is false, we're in "Hide muted" mode - filter out muted users
+      // When showMuted is true, we're in "Show everyone" mode - show all users including muted
       if (isMuted && !showMuted) return false;
       
       return true;
@@ -1032,7 +1033,7 @@ function ActivityScreenContent() {
                           }}
                         >
                           <Text style={{ color: showMuted ? '#fff' : '#666', fontSize: 14, fontWeight: '500' }}>
-                            {showMuted ? 'Hide muted' : 'Show everyone'}
+                            {showMuted ? 'Hide muted friends' : 'Show muted friends'}
                           </Text>
                         </Pressable>
                       )}
