@@ -97,7 +97,11 @@ export class UsersController {
 
     try {
       // First, delete from Plaza database (cascades will handle related records)
-      await this.usersService.deleteAccount(clerkId);
+      const plazaDeleted = await this.usersService.deleteAccount(clerkId);
+      
+      if (!plazaDeleted) {
+        console.log(`[UsersController] User ${clerkId} not found in Plaza database (may have been already deleted)`);
+      }
 
       // Then, delete from Clerk
       try {
@@ -105,7 +109,7 @@ export class UsersController {
       } catch (clerkError: any) {
         // Log but don't fail if Clerk deletion fails (user might already be deleted)
         console.error('[UsersController] Error deleting user from Clerk:', clerkError);
-        // Continue - Plaza deletion already succeeded
+        // Continue - deletion attempt completed
       }
 
       return {

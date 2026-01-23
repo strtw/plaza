@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: plaza_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: plaza_user
+      POSTGRES_PASSWORD: plaza_dev_password
+      POSTGRES_DB: plaza_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - plaza_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plaza_user -d plaza_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  plaza_postgres_data:

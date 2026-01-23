@@ -92,11 +92,21 @@ export class UsersService {
    * Delete user account from Plaza database
    * Note: Related records (statuses, invites, friends) are automatically deleted
    * due to onDelete: Cascade in the schema
+   * Returns true if user was deleted, false if user didn't exist
    */
-  async deleteAccount(clerkId: string) {
-    return prisma.user.delete({
-      where: { clerkId },
-    });
+  async deleteAccount(clerkId: string): Promise<boolean> {
+    try {
+      await prisma.user.delete({
+        where: { clerkId },
+      });
+      return true;
+    } catch (error: any) {
+      // P2025 = Record not found - user doesn't exist in Plaza DB
+      if (error.code === 'P2025') {
+        return false;
+      }
+      throw error;
+    }
   }
 }
 
