@@ -140,8 +140,8 @@ export const createApi = (getToken: () => Promise<string | null>) => {
       fetchApi(`/friends/${sharerId}/block`, {
         method: 'POST',
       }),
-    unmuteFriend: (friendId: string) =>
-      fetchApi(`/friends/${friendId}/unmute`, {
+    unmuteFriend: (sharerId: string) =>
+      fetchApi(`/friends/${sharerId}/unmute`, {
         method: 'POST',
       }),
     unblockFriend: (friendId: string) =>

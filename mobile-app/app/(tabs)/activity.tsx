@@ -1,4 +1,4 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, LayoutAnimation, UIManager } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, LayoutAnimation, UIManager, PanResponder } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
@@ -56,6 +56,178 @@ const AnimatedContactListItem = ({ contact, previousStatus }: { contact: any; pr
   );
 };
 
+// Swipeable wrapper component for contact items with mute action
+const SwipeableContactListItem = ({ 
+  contact, 
+  previousStatus, 
+  onMute,
+  isNew = false,
+  isUpdated = false,
+  openRowId,
+  setOpenRowId,
+}: { 
+  contact: any; 
+  previousStatus?: any;
+  onMute: (contactId: string) => void;
+  isNew?: boolean;
+  isUpdated?: boolean;
+  openRowId: string | null;
+  setOpenRowId: (id: string | null) => void;
+}) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const currentTranslateX = useRef(0);
+  const SWIPE_THRESHOLD = -60; // Swipe left threshold to reveal
+  const ACTION_WIDTH = 80; // Width of the action button
+  const isMuted = contact?.friendStatus === 'MUTED';
+  const isOpen = openRowId === contact.id;
+
+  // Track current translateX value
+  useEffect(() => {
+    const listener = translateX.addListener(({ value }) => {
+      currentTranslateX.current = value;
+    });
+    return () => {
+      translateX.removeListener(listener);
+    };
+  }, [translateX]);
+
+  // Close this row if another row is opened
+  useEffect(() => {
+    if (openRowId && openRowId !== contact.id) {
+      currentTranslateX.current = 0;
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 7,
+      }).start();
+    }
+  }, [openRowId, contact.id, translateX]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to horizontal swipes (more horizontal than vertical)
+        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
+      },
+      onPanResponderGrant: () => {
+        // Stop any ongoing animations
+        translateX.stopAnimation();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        // Allow swiping left to reveal or right to hide
+        if (gestureState.dx < 0) {
+          // Swiping left - reveal action
+          const newValue = Math.max(gestureState.dx, -ACTION_WIDTH);
+          translateX.setValue(newValue);
+          currentTranslateX.current = newValue;
+        } else if (gestureState.dx > 0) {
+          // Swiping right - hide action (if already open)
+          if (currentTranslateX.current < 0) {
+            const newValue = Math.min(currentTranslateX.current + gestureState.dx, 0);
+            translateX.setValue(newValue);
+            currentTranslateX.current = newValue;
+          }
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const currentValue = currentTranslateX.current;
+        
+        if (gestureState.dx < SWIPE_THRESHOLD || (currentValue < SWIPE_THRESHOLD && gestureState.dx < 0)) {
+          // Swipe left enough - reveal action
+          setOpenRowId(contact.id);
+          Animated.spring(translateX, {
+            toValue: -ACTION_WIDTH,
+            useNativeDriver: true,
+            tension: 50,
+            friction: 7,
+          }).start(() => {
+            currentTranslateX.current = -ACTION_WIDTH;
+          });
+        } else {
+          // Not enough swipe or swiping right - snap back
+          setOpenRowId(null);
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 50,
+            friction: 7,
+          }).start(() => {
+            currentTranslateX.current = 0;
+          });
+        }
+      },
+    })
+  ).current;
+
+  const handleMute = () => {
+    onMute(contact.id);
+    setOpenRowId(null);
+    // Close the swipe after muting
+    Animated.spring(translateX, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 7,
+    }).start(() => {
+      currentTranslateX.current = 0;
+    });
+  };
+
+  return (
+    <View style={{ position: 'relative', overflow: 'hidden' }}>
+      {/* Background action button (always present, revealed by swipe) */}
+      <View
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: ACTION_WIDTH,
+          backgroundColor: isMuted ? '#666' : '#999',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 0,
+        }}
+      >
+        <Pressable
+          onPress={handleMute}
+          style={{
+            width: '100%',
+            height: '100%',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <Ionicons 
+            name={isMuted ? "notifications" : "notifications-off"} 
+            size={24} 
+            color="#fff" 
+          />
+        </Pressable>
+      </View>
+      
+      {/* Swipeable content */}
+      <Animated.View
+        style={{
+          transform: [{ translateX }],
+          backgroundColor: '#fff',
+          zIndex: 1,
+        }}
+        {...panResponder.panHandlers}
+      >
+        <ContactListItem 
+          contact={contact}
+          isNew={isNew}
+          isUpdated={isUpdated}
+          previousStatus={previousStatus}
+        />
+      </Animated.View>
+    </View>
+  );
+};
+
 // Helper function to round time to nearest 15 minutes
 const roundToNearest15Minutes = (date: Date): Date => {
   const rounded = new Date(date);
@@ -104,6 +276,9 @@ function ActivityScreenContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { currentStatus: storeStatus, setCurrentStatus } = useUserStore();
+  
+  // Track which row is currently swiped open (only one at a time)
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
 
   // Modal state
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -263,6 +438,47 @@ function ActivityScreenContent() {
       Alert.alert('Error', error.message || 'Failed to clear status. Please try again.');
     },
   });
+
+  // Mutation for muting a friend
+  const muteFriendMutation = useMutation({
+    mutationFn: api.muteFriend,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', 'friends-statuses'] });
+    },
+    onError: (error: any) => {
+      console.error('Error muting friend:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to mute friend. Please try again.',
+        [{ text: 'OK' }]
+      );
+    },
+  });
+
+  // Mutation for unmuting a friend
+  const unmuteFriendMutation = useMutation({
+    mutationFn: api.unmuteFriend,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts', 'friends-statuses'] });
+    },
+    onError: (error: any) => {
+      console.error('Error unmuting friend:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to unmute friend. Please try again.',
+        [{ text: 'OK' }]
+      );
+    },
+  });
+
+  const handleMuteFriend = (contactId: string) => {
+    const contact = contacts?.find((c: any) => c.id === contactId);
+    if (contact?.friendStatus === 'MUTED') {
+      unmuteFriendMutation.mutate(contactId);
+    } else {
+      muteFriendMutation.mutate(contactId);
+    }
+  };
 
   // Calculate header padding
   const headerPaddingTop = insets.top + 16;
@@ -812,14 +1028,29 @@ function ActivityScreenContent() {
         data={activeContacts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
-          return item.isNewOrChanged ? (
-            <AnimatedContactListItem contact={item} />
-          ) : (
-            <ContactListItem 
+          // Wrap AnimatedContactListItem in SwipeableContactListItem for swipe functionality
+          if (item.isNewOrChanged) {
+            return (
+              <SwipeableContactListItem 
+                contact={item} 
+                isNew={item.isNew}
+                isUpdated={item.isUpdated}
+                previousStatus={item.previousStatus || item.previousStatus}
+                onMute={handleMuteFriend}
+                openRowId={openRowId}
+                setOpenRowId={setOpenRowId}
+              />
+            );
+          }
+          return (
+            <SwipeableContactListItem 
               contact={item} 
               isNew={item.isNew}
               isUpdated={item.isUpdated}
               previousStatus={item.previousStatus}
+              onMute={handleMuteFriend}
+              openRowId={openRowId}
+              setOpenRowId={setOpenRowId}
             />
           );
         }}

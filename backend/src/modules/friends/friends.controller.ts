@@ -138,8 +138,8 @@ export class FriendsController {
     }
   }
 
-  @Post(':id/unmute')
-  async unmuteFriend(@Request() req, @Param('id') friendUserId: string) {
+  @Post(':sharerId/unmute')
+  async unmuteFriend(@Request() req, @Param('sharerId') sharerId: string) {
     try {
       const user = await prisma.user.findUnique({
         where: { clerkId: req.userId },
@@ -150,7 +150,7 @@ export class FriendsController {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
 
-      return this.friendsService.unmuteFriend(user.id, friendUserId);
+      return this.friendsService.unmuteFriend(user.id, sharerId);
     } catch (error: any) {
       console.error('[FriendsController] Error unmuting friend:', error);
       throw new HttpException(

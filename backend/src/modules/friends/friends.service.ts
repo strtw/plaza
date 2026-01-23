@@ -244,25 +244,29 @@ export class FriendsService {
   }
 
   /**
-   * Unmute a friend
+   * Unmute a friend (recipient perspective)
+   * Looks for Friend record where userId=sharerId AND friendUserId=currentUser (incoming direction)
+   * Same direction as muteFriend for consistency
    */
-  async unmuteFriend(userId: string, friendUserId: string) {
+  async unmuteFriend(userId: string, sharerId: string) {
     try {
-      const friend = await prisma.friend.findUnique({
+      // Check if Friend record exists where userId=sharerId AND friendUserId=currentUser
+      const existingFriend = await prisma.friend.findUnique({
         where: {
           userId_friendUserId: {
-            userId,
-            friendUserId,
+            userId: sharerId, // Sharer is the userId
+            friendUserId: userId, // Current user is the friendUserId (recipient)
           },
         },
       });
 
-      if (!friend) {
+      if (!existingFriend) {
         throw new Error('Friend not found');
       }
 
+      // Update existing Friend record to ACCEPTED
       return await prisma.friend.update({
-        where: { id: friend.id },
+        where: { id: existingFriend.id },
         data: { status: FriendStatus.ACCEPTED },
       });
     } catch (error: any) {
