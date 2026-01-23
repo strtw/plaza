@@ -118,7 +118,7 @@ export class StatusService {
     }
   }
 
-  async getFriendsStatuses(userId: string, includeMuted: boolean = false) {
+  async getFriendsStatuses(userId: string) {
     try {
       // Validate userId
       if (!userId) {
@@ -128,17 +128,12 @@ export class StatusService {
 
       // Query Friend table where friendUserId = current user (people who share with current user)
       // User A shares with User B → User B sees User A's status
-      // Default: only ACCEPTED friends (exclude MUTED)
-      // With includeMuted: ACCEPTED or MUTED friends
+      // Always return ACCEPTED and MUTED friends (frontend handles filtering)
       // Never show PENDING or BLOCKED
-      const statusFilter = includeMuted 
-        ? [FriendStatus.ACCEPTED, FriendStatus.MUTED]
-        : [FriendStatus.ACCEPTED];
-
       const friends = await prisma.friend.findMany({
         where: { 
           friendUserId: userId,  // People who share with current user
-          status: { in: statusFilter },
+          status: { in: [FriendStatus.ACCEPTED, FriendStatus.MUTED] },
         },
         select: { userId: true }, // Get the userId values (people who share with current user)
       });

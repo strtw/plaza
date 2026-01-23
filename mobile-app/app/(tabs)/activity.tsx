@@ -65,6 +65,7 @@ const SwipeableContactListItem = ({
   isUpdated = false,
   openRowId,
   setOpenRowId,
+  locallyMutedContacts,
 }: { 
   contact: any; 
   previousStatus?: any;
@@ -73,12 +74,14 @@ const SwipeableContactListItem = ({
   isUpdated?: boolean;
   openRowId: string | null;
   setOpenRowId: (id: string | null) => void;
+  locallyMutedContacts: Set<string>;
 }) => {
   const translateX = useRef(new Animated.Value(0)).current;
   const currentTranslateX = useRef(0);
   const SWIPE_THRESHOLD = -60; // Swipe left threshold to reveal
   const ACTION_WIDTH = 80; // Width of the action button
-  const isMuted = contact?.friendStatus === 'MUTED';
+  // Check both friendStatus and locallyMutedContacts for immediate UI updates
+  const isMuted = contact?.friendStatus === 'MUTED' || locallyMutedContacts.has(contact.id);
   const isOpen = openRowId === contact.id;
 
   // Track current translateX value
@@ -200,11 +203,11 @@ const SwipeableContactListItem = ({
             alignItems: 'center',
           }}
         >
-          <Ionicons 
-            name={isMuted ? "notifications" : "notifications-off"} 
-            size={24} 
-            color="#fff" 
-          />
+            <Ionicons 
+              name={isMuted ? "eye-off" : "eye"} 
+              size={24} 
+              color="#fff" 
+            />
         </Pressable>
       </View>
       
@@ -279,6 +282,9 @@ function ActivityScreenContent() {
   
   // Track which row is currently swiped open (only one at a time)
   const [openRowId, setOpenRowId] = useState<string | null>(null);
+  
+  // Track locally muted contacts for immediate UI updates (before query refetch)
+  const [locallyMutedContacts, setLocallyMutedContacts] = useState<Set<string>>(new Set());
 
   // Modal state
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -301,9 +307,10 @@ function ActivityScreenContent() {
 
   const [showMuted, setShowMuted] = useState(false);
 
+  // Always fetch all statuses (accepted + muted) - filtering is frontend-only
   const { data: statuses, refetch: refetchStatuses } = useQuery({
-    queryKey: ['friends-statuses', showMuted],
-    queryFn: () => api.getFriendsStatuses(showMuted),
+    queryKey: ['friends-statuses'], // Remove showMuted from query key to prevent refetches on filter toggle
+    queryFn: () => api.getFriendsStatuses(), // Backend always returns all accepted and muted users
     enabled: isLoaded && isSignedIn,
     refetchInterval: 10000, // Poll every 10 seconds
   });
@@ -442,7 +449,25 @@ function ActivityScreenContent() {
   // Mutation for muting a friend
   const muteFriendMutation = useMutation({
     mutationFn: api.muteFriend,
-    onSuccess: () => {
+    onSuccess: (_, contactId) => {
+      // Configure layout animation for smooth row removal
+      LayoutAnimation.configureNext({
+        duration: 300,
+        create: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+          property: LayoutAnimation.Properties.opacity,
+        },
+        update: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+        },
+        delete: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+          property: LayoutAnimation.Properties.opacity,
+        },
+      });
+      
+      // Immediately update local state to hide the contact
+      setLocallyMutedContacts(prev => new Set(prev).add(contactId));
       queryClient.invalidateQueries({ queryKey: ['contacts', 'friends-statuses'] });
     },
     onError: (error: any) => {
@@ -458,7 +483,29 @@ function ActivityScreenContent() {
   // Mutation for unmuting a friend
   const unmuteFriendMutation = useMutation({
     mutationFn: api.unmuteFriend,
-    onSuccess: () => {
+    onSuccess: (_, contactId) => {
+      // Configure layout animation for smooth row insertion
+      LayoutAnimation.configureNext({
+        duration: 300,
+        create: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+          property: LayoutAnimation.Properties.opacity,
+        },
+        update: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+        },
+        delete: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+          property: LayoutAnimation.Properties.opacity,
+        },
+      });
+      
+      // Immediately update local state to show the contact
+      setLocallyMutedContacts(prev => {
+        const next = new Set(prev);
+        next.delete(contactId);
+        return next;
+      });
       queryClient.invalidateQueries({ queryKey: ['contacts', 'friends-statuses'] });
     },
     onError: (error: any) => {
@@ -473,12 +520,26 @@ function ActivityScreenContent() {
 
   const handleMuteFriend = (contactId: string) => {
     const contact = contacts?.find((c: any) => c.id === contactId);
-    if (contact?.friendStatus === 'MUTED') {
+    // Check both the contact's friendStatus and local state
+    const isMuted = contact?.friendStatus === 'MUTED' || locallyMutedContacts.has(contactId);
+    
+    if (isMuted) {
       unmuteFriendMutation.mutate(contactId);
     } else {
       muteFriendMutation.mutate(contactId);
     }
   };
+  
+  // Sync locallyMutedContacts with contacts data when it updates
+  useEffect(() => {
+    if (contacts) {
+      // Update local state to match contacts data (in case of external changes)
+      const mutedContactIds = contacts
+        .filter((c: any) => c.friendStatus === 'MUTED')
+        .map((c: any) => c.id);
+      setLocallyMutedContacts(new Set(mutedContactIds));
+    }
+  }, [contacts]);
 
   // Calculate header padding
   const headerPaddingTop = insets.top + 16;
@@ -622,42 +683,35 @@ function ActivityScreenContent() {
   // Detect status changes to show "New updates" indicator
   // Compare current statuses (from polling) with displayedStatuses (what user sees)
   // Only trigger when there are actual new/updated statuses, not filter changes
+  // Note: showMuted is NOT in dependencies - filter changes should not trigger comparison
   useEffect(() => {
+    // Don't run comparison on first load - wait until displayedStatuses is initialized
+    // This prevents false "new updates" detection when toggling showMuted before first refresh
+    if (!persistentState.hasInitialized) {
+      setHasNewUpdates(false);
+      return;
+    }
+
     if (!statuses || displayedStatuses.length === 0) {
       // If no displayed statuses yet, don't show banner
       setHasNewUpdates(false);
       return;
     }
 
-    // Filter statuses based on showMuted to compare apples-to-apples
-    // This ensures we only detect real changes, not filter changes
-    const filteredStatuses = showMuted 
-      ? statuses 
-      : statuses.filter((s: any) => {
-          const contact = contacts?.find((c: any) => c.id === s.user?.id || c.id === s.userId);
-          return contact?.friendStatus !== 'MUTED';
-        });
-    
-    const filteredDisplayedStatuses = showMuted
-      ? displayedStatuses
-      : displayedStatuses.filter((s: any) => {
-          const contact = contacts?.find((c: any) => c.id === s.user?.id || c.id === s.userId);
-          return contact?.friendStatus !== 'MUTED';
-        });
-
-    // Compare filtered current statuses with filtered displayed statuses
-    const currentStatusIds = new Set(filteredStatuses.map((s: any) => s.id));
-    const displayedStatusIds = new Set(filteredDisplayedStatuses.map((s: any) => s.id));
+    // Compare unfiltered statuses to detect actual changes
+    // We compare the raw statuses, not filtered versions, to avoid filter-induced false positives
+    const currentStatusIds = new Set(statuses.map((s: any) => s.id));
+    const displayedStatusIds = new Set(displayedStatuses.map((s: any) => s.id));
 
     // Check for new or removed statuses
-    const hasNewStatuses = filteredStatuses.some((s: any) => !displayedStatusIds.has(s.id));
-    const hasRemovedStatuses = filteredDisplayedStatuses.some(
+    const hasNewStatuses = statuses.some((s: any) => !displayedStatusIds.has(s.id));
+    const hasRemovedStatuses = displayedStatuses.some(
       (s: any) => !currentStatusIds.has(s.id)
     );
 
     // Check for updated statuses (same ID but different content)
-    const hasUpdatedStatuses = filteredStatuses.some((current: any) => {
-      const displayed = filteredDisplayedStatuses.find((d: any) => d.id === current.id);
+    const hasUpdatedStatuses = statuses.some((current: any) => {
+      const displayed = displayedStatuses.find((d: any) => d.id === current.id);
       if (!displayed) return false;
       return (
         displayed.message !== current.message ||
@@ -687,7 +741,7 @@ function ActivityScreenContent() {
       setHasNewUpdates(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statuses, displayedStatuses, showMuted, contacts]);
+  }, [statuses, displayedStatuses]); // Removed showMuted and contacts from dependencies
 
   // Helper function to check if status is expired or expiring soon (< 1 minute)
   const isStatusExpiredOrExpiringSoon = (status: ContactStatus | null): boolean => {
@@ -835,7 +889,19 @@ function ActivityScreenContent() {
   // Backend already filters statuses by time window (startTime <= now <= endTime)
   // Memoize to prevent recomputation when statuses (polling) updates
   const activeContacts = useMemo(() => {
-    const filtered = contactsWithStatus.filter((contact: any) => contact.status !== undefined);
+    const filtered = contactsWithStatus.filter((contact: any) => {
+      // Must have a status
+      if (!contact.status) return false;
+      
+      // Check if contact is muted (either from friendStatus or local state)
+      const isMuted = contact.friendStatus === 'MUTED' || locallyMutedContacts.has(contact.id);
+      
+      // If muted, only show if showMuted toggle is on
+      if (isMuted && !showMuted) return false;
+      
+      return true;
+    });
+    
     // Sort: NEW items first, then UPDATED items, then unchanged, then by name
     return filtered.sort((a: any, b: any) => {
       // NEW items first
@@ -851,7 +917,7 @@ function ActivityScreenContent() {
       const nameB = getFullName(b).toLowerCase();
       return nameA.localeCompare(nameB);
     });
-  }, [contactsWithStatus]);
+  }, [contactsWithStatus, locallyMutedContacts, showMuted]);
 
   const handleSaveStatus = () => {
     if (!message.trim() || !location || !endTime) {
@@ -955,21 +1021,21 @@ function ActivityScreenContent() {
     <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={[styles.headerContainer, { paddingTop: headerPaddingTop }]}>
         <Text style={styles.headerTitle}>Activity</Text>
-        {hasMutedFriends && (
-          <Pressable
-            onPress={() => setShowMuted(!showMuted)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 16,
-              backgroundColor: showMuted ? '#007AFF' : '#E5E5E5',
-            }}
-          >
-            <Text style={{ color: showMuted ? '#fff' : '#666', fontSize: 14, fontWeight: '500' }}>
-              {showMuted ? 'Hide muted' : 'Show everyone'}
-            </Text>
-          </Pressable>
-        )}
+                      {hasMutedFriends && (
+                        <Pressable
+                          onPress={() => setShowMuted(!showMuted)}
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 16,
+                            backgroundColor: showMuted ? '#007AFF' : '#E5E5E5',
+                          }}
+                        >
+                          <Text style={{ color: showMuted ? '#fff' : '#666', fontSize: 14, fontWeight: '500' }}>
+                            {showMuted ? 'Hide muted' : 'Show everyone'}
+                          </Text>
+                        </Pressable>
+                      )}
       </View>
       <Pressable 
         style={styles.statusInputContainer}
@@ -1036,6 +1102,7 @@ function ActivityScreenContent() {
                 onMute={handleMuteFriend}
                 openRowId={openRowId}
                 setOpenRowId={setOpenRowId}
+                locallyMutedContacts={locallyMutedContacts}
               />
             );
           }
@@ -1048,6 +1115,7 @@ function ActivityScreenContent() {
               onMute={handleMuteFriend}
               openRowId={openRowId}
               setOpenRowId={setOpenRowId}
+              locallyMutedContacts={locallyMutedContacts}
             />
           );
         }}

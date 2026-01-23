@@ -75,11 +75,11 @@ export class StatusController {
   }
 
   @Get('friends')
-  async getFriendsStatuses(@Request() req, @Query('includeMuted') includeMuted?: string) {
+  async getFriendsStatuses(@Request() req) {
     try {
       const databaseUserId = await this.getDatabaseUserId(req.userId);
-      const includeMutedBool = includeMuted === 'true';
-      return await this.statusService.getFriendsStatuses(databaseUserId, includeMutedBool);
+      // Always return all accepted and muted friends - frontend handles filtering
+      return await this.statusService.getFriendsStatuses(databaseUserId);
     } catch (error: any) {
       console.error('Error in getFriendsStatuses controller:', error);
       // Return empty array instead of throwing to prevent 500 errors

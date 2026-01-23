@@ -86,9 +86,9 @@ export const createApi = (getToken: () => Promise<string | null>) => {
       }),
     getContacts: () => fetchApi('/friends'),
     getPendingFriends: () => fetchApi('/friends/pending'),
-    getFriendsStatuses: (includeMuted?: boolean) => {
-      const url = includeMuted ? '/status/friends?includeMuted=true' : '/status/friends';
-      return fetchApi(url);
+    getFriendsStatuses: () => {
+      // Backend always returns all accepted and muted friends - frontend handles filtering
+      return fetchApi('/status/friends');
     },
     getMyStatus: () => fetchApi('/status/me'),
     createStatus: (data: any) =>
