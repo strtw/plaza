@@ -14,7 +14,7 @@ export class FriendsService {
       const friends = await prisma.friend.findMany({
         where: { 
           userId,
-          status: FriendStatus.ACTIVE,
+          status: FriendStatus.ACCEPTED,
         },
         include: {
           friendUser: {
@@ -69,7 +69,7 @@ export class FriendsService {
         if (existing.status === FriendStatus.BLOCKED) {
           return await prisma.friend.update({
             where: { id: existing.id },
-            data: { status: FriendStatus.ACTIVE },
+            data: { status: FriendStatus.ACCEPTED },
           });
         }
         return existing;
@@ -80,7 +80,7 @@ export class FriendsService {
         data: {
           userId,
           friendUserId,
-          status: FriendStatus.ACTIVE,
+          status: FriendStatus.ACCEPTED,
         },
       });
     } catch (error: any) {
@@ -165,7 +165,7 @@ export class FriendsService {
 
       return await prisma.friend.update({
         where: { id: friend.id },
-        data: { status: FriendStatus.ACTIVE },
+        data: { status: FriendStatus.ACCEPTED },
       });
     } catch (error: any) {
       console.error('[FriendsService] Error unmuting friend:', error);
@@ -193,7 +193,7 @@ export class FriendsService {
 
       return await prisma.friend.update({
         where: { id: friend.id },
-        data: { status: FriendStatus.ACTIVE },
+        data: { status: FriendStatus.ACCEPTED },
       });
     } catch (error: any) {
       console.error('[FriendsService] Error unblocking friend:', error);

@@ -62,7 +62,7 @@ export class ContactsService {
                 data: {
                   userId,
                   friendUserId: contactUser.id,
-                  status: FriendStatus.ACTIVE,
+                  status: FriendStatus.ACCEPTED,
                 },
               });
             } catch (createError: any) {
@@ -77,7 +77,7 @@ export class ContactsService {
             // Reactivate if previously blocked
             await prisma.friend.update({
               where: { id: existingFriend.id },
-              data: { status: FriendStatus.ACTIVE },
+              data: { status: FriendStatus.ACCEPTED },
             });
           }
 

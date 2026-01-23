@@ -108,13 +108,13 @@ export class DevService {
           data: {
             userId: user.id, // Mock user is adding the primary user
             friendUserId: primaryUser.id, // Primary user is being added
-            status: FriendStatus.ACTIVE,
+            status: FriendStatus.ACCEPTED,
           },
         });
         console.log(`[DevService] Created friendship: mock user ${user.id} added primary user as friend`);
       } else {
-        // If friendship exists but is not ACTIVE, update it to ACTIVE
-        if (existingFriendship.status !== FriendStatus.ACTIVE) {
+        // If friendship exists but is not ACCEPTED, update it to ACCEPTED
+        if (existingFriendship.status !== FriendStatus.ACCEPTED) {
           await prisma.friend.update({
             where: {
               userId_friendUserId: {
@@ -123,10 +123,10 @@ export class DevService {
               },
             },
             data: {
-              status: FriendStatus.ACTIVE,
+              status: FriendStatus.ACCEPTED,
             },
           });
-          console.log(`[DevService] Updated existing friendship to ACTIVE for mock user ${user.id}`);
+          console.log(`[DevService] Updated existing friendship to ACCEPTED for mock user ${user.id}`);
         }
       }
     }
@@ -236,12 +236,35 @@ export class DevService {
 
       console.log(`[DevService] Found primary user: ${primaryUser.id}`);
 
+      // Check ALL friend records for this primary user (any status)
+      const allFriendRecords = await prisma.friend.findMany({
+        where: {
+          friendUserId: primaryUser.id,
+        },
+        select: {
+          userId: true,
+          status: true,
+        },
+      });
+
+      // Migrate any ACTIVE records to ACCEPTED (one-time migration for existing data)
+      const activeFriends = allFriendRecords.filter(f => f.status === 'ACTIVE');
+      if (activeFriends.length > 0) {
+        await prisma.$executeRaw`
+          UPDATE "Friend" 
+          SET "status" = 'ACCEPTED' 
+          WHERE "friendUserId" = ${primaryUser.id}::text 
+          AND "status" = 'ACTIVE'::"FriendStatus"
+        `;
+        console.log(`[DevService] Migrated ${activeFriends.length} ACTIVE friend records to ACCEPTED`);
+      }
+
       // Get people who have added the primary user as a friend
       // These are the users whose statuses will appear in the primary user's Activity tab
       const friendRecords = await prisma.friend.findMany({
         where: {
           friendUserId: primaryUser.id, // People who added the primary user
-          status: FriendStatus.ACTIVE,
+          status: FriendStatus.ACCEPTED,
         },
         select: {
           userId: true, // The users who added the primary user
@@ -367,6 +390,7 @@ export class DevService {
               location: randomLocation,
               startTime: now,
               endTime: endTime,
+              sharedWith: [primaryUser.id], // Share with primary user so they see it in Activity feed
             };
 
             if (existingStatus) {

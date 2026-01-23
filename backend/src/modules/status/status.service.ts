@@ -100,7 +100,7 @@ export class StatusService {
       const friends = await prisma.friend.findMany({
         where: { 
           friendUserId: userId,  // People who added current user
-          status: FriendStatus.ACTIVE,
+          status: FriendStatus.ACCEPTED,
         },
         select: { userId: true }, // Get the userId values (people who added current user)
       });
