@@ -596,14 +596,9 @@ function ActivityScreenContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statuses]);
 
-  // Update displayedStatuses when showMuted changes (to immediately reflect the filter)
-  useEffect(() => {
-    if (statuses) {
-      setDisplayedStatuses(statuses);
-      persistentState.displayedStatuses = statuses;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showMuted]);
+  // Note: We don't update displayedStatuses when showMuted changes
+  // Instead, we filter in the contactsWithStatus memo based on showMuted
+  // This prevents false "new updates" detection when toggling the filter
 
   // Keep persistent storage in sync with state
   useEffect(() => {
@@ -626,29 +621,49 @@ function ActivityScreenContent() {
 
   // Detect status changes to show "New updates" indicator
   // Compare current statuses (from polling) with displayedStatuses (what user sees)
+  // Only trigger when there are actual new/updated statuses, not filter changes
   useEffect(() => {
     if (!statuses || displayedStatuses.length === 0) {
+      // If no displayed statuses yet, don't show banner
+      setHasNewUpdates(false);
       return;
     }
 
-    // Compare current statuses with displayed statuses
-    const currentStatusIds = new Set(statuses.map((s: any) => s.id));
-    const displayedStatusIds = new Set(displayedStatuses.map((s: any) => s.id));
+    // Filter statuses based on showMuted to compare apples-to-apples
+    // This ensures we only detect real changes, not filter changes
+    const filteredStatuses = showMuted 
+      ? statuses 
+      : statuses.filter((s: any) => {
+          const contact = contacts?.find((c: any) => c.id === s.user?.id || c.id === s.userId);
+          return contact?.friendStatus !== 'MUTED';
+        });
+    
+    const filteredDisplayedStatuses = showMuted
+      ? displayedStatuses
+      : displayedStatuses.filter((s: any) => {
+          const contact = contacts?.find((c: any) => c.id === s.user?.id || c.id === s.userId);
+          return contact?.friendStatus !== 'MUTED';
+        });
+
+    // Compare filtered current statuses with filtered displayed statuses
+    const currentStatusIds = new Set(filteredStatuses.map((s: any) => s.id));
+    const displayedStatusIds = new Set(filteredDisplayedStatuses.map((s: any) => s.id));
 
     // Check for new or removed statuses
-    const hasNewStatuses = statuses.some((s: any) => !displayedStatusIds.has(s.id));
-    const hasRemovedStatuses = displayedStatuses.some(
+    const hasNewStatuses = filteredStatuses.some((s: any) => !displayedStatusIds.has(s.id));
+    const hasRemovedStatuses = filteredDisplayedStatuses.some(
       (s: any) => !currentStatusIds.has(s.id)
     );
 
     // Check for updated statuses (same ID but different content)
-    const hasUpdatedStatuses = statuses.some((current: any) => {
-      const displayed = displayedStatuses.find((d: any) => d.id === current.id);
+    const hasUpdatedStatuses = filteredStatuses.some((current: any) => {
+      const displayed = filteredDisplayedStatuses.find((d: any) => d.id === current.id);
       if (!displayed) return false;
       return (
         displayed.message !== current.message ||
         displayed.location !== current.location ||
-        displayed.endTime !== current.endTime
+        displayed.endTime !== current.endTime ||
+        displayed.updatedAt !== current.updatedAt
       );
     });
 
@@ -667,9 +682,12 @@ function ActivityScreenContent() {
           useNativeDriver: true,
         }),
       ]).start();
+    } else {
+      // No actual changes detected, hide banner
+      setHasNewUpdates(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statuses, displayedStatuses]);
+  }, [statuses, displayedStatuses, showMuted, contacts]);
 
   // Helper function to check if status is expired or expiring soon (< 1 minute)
   const isStatusExpiredOrExpiringSoon = (status: ContactStatus | null): boolean => {
@@ -727,19 +745,21 @@ function ActivityScreenContent() {
 
   // Merge contacts with their statuses (use displayedStatuses to keep list frozen until refresh)
   // Memoize to prevent recomputation when statuses (polling) updates
+  // Filter based on showMuted here instead of updating displayedStatuses
   const contactsWithStatus = useMemo(() => {
+    // Filter displayedStatuses based on showMuted
+    const filteredDisplayedStatuses = showMuted
+      ? displayedStatuses
+      : displayedStatuses.filter((s: any) => {
+          const contact = contacts?.find((c: any) => c.id === s.user?.id || c.id === s.userId);
+          return contact?.friendStatus !== 'MUTED';
+        });
+    
     // Check if we have previous state to compare against (not on initial load)
     // On initial load: previousDisplayedStatusesRef is empty → no pills shown (user hasn't seen anything yet)
     // After first refresh: previousDisplayedStatusesRef contains the baseline → comparison starts working
     // CRITICAL: Pills are ONLY cleared when user pulls to refresh (refresh handler updates previousDisplayedStatusesRef)
     const hasPreviousState = previousDisplayedStatusesRef.current.length > 0;
-    
-    // Debug logging (can be removed in production)
-    // console.log('[Activity] contactsWithStatus memo recalculating:', {
-    //   hasPreviousState,
-    //   previousStatusesCount: previousDisplayedStatusesRef.current.length,
-    //   displayedStatusesCount: displayedStatuses.length,
-    // });
     
     // Map previous statuses by status.id (stable after backend UPDATE change)
     // This represents what the user saw BEFORE the last refresh
@@ -755,7 +775,8 @@ function ActivityScreenContent() {
 
     return contacts?.map((contact: any) => {
       const contactId = String(contact.id);
-      const status = displayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id);
+      // Use filtered displayedStatuses to respect showMuted toggle
+      const status = filteredDisplayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id);
       
       // Determine if new or updated (only if we have previous state to compare against)
       // This logic ensures pills only show for items that changed since the last refresh
@@ -785,18 +806,6 @@ function ActivityScreenContent() {
         
         // If both are false: Status exists in previous AND updatedAt is the same
         // This means the status is unchanged → NO PILL (user has already seen it)
-        
-        // Debug logging (can be removed in production)
-        // if (isNew || isUpdated) {
-        //   console.log('[Activity] Status change detected:', {
-        //     contactId: contact.id,
-        //     statusId: status.id,
-        //     isNew,
-        //     isUpdated,
-        //     previousUpdatedAt: previousStatus?.updatedAt,
-        //     currentUpdatedAt: status.updatedAt,
-        //   });
-        // }
       }
       
       // Keep existing flags for sorting/animations
@@ -818,21 +827,9 @@ function ActivityScreenContent() {
         previousStatus, // Previous status data for comparison display
       };
       
-      // Debug logging (can be removed in production)
-      // if (result.isNew || result.isUpdated) {
-      //   console.log('[Activity] Contact with pill flags:', {
-      //     contactId: contact.id,
-      //     contactName: contact.firstName || contact.lastName || 'Unknown',
-      //     isNew: result.isNew,
-      //     isUpdated: result.isUpdated,
-      //     hasStatus: !!status,
-      //     statusId: status?.id,
-      //   });
-      // }
-      
       return result;
     }) || [];
-  }, [contacts, displayedStatuses]);
+  }, [contacts, displayedStatuses, showMuted]);
 
   // Filter to only show contacts with active statuses and sort: NEW first, then UPDATED, then unchanged
   // Backend already filters statuses by time window (startTime <= now <= endTime)
@@ -1059,94 +1056,79 @@ function ActivityScreenContent() {
           <RefreshControl 
             refreshing={isLoading} 
             onRefresh={async () => {
+              // CRITICAL: Capture the CURRENT displayedStatuses (what user is seeing) as the baseline
+              // This represents the state BEFORE refresh - items the user has already seen
+              // Do this BEFORE refetching to ensure we capture the correct baseline
+              const currentDisplayed = displayedStatuses.length > 0 ? displayedStatuses : [];
+              
               // Refetch both contacts and statuses
-              await Promise.all([
+              const [contactsResult, statusesResult] = await Promise.all([
                 refetch(),
                 refetchStatuses(),
               ]);
-              // Wait a moment for React Query to update the statuses variable
-              // Then sync displayedStatuses with the updated statuses
-              // This is the ONLY place where displayedStatuses should be updated after initial load
-              setTimeout(() => {
-                if (statuses) {
-                  // CRITICAL: Capture the CURRENT displayedStatuses (what user is seeing) as the baseline
-                  // This represents the state BEFORE refresh - items the user has already seen
-                  // After refresh, pills will only show for items that are NEW or UPDATED compared to this baseline
-                  const currentDisplayed = displayedStatuses.length > 0 ? displayedStatuses : [];
-                  
-                  // Map previous statuses by status.id (stable after backend UPDATE change)
-                  // This map is used to identify which items are new vs updated vs unchanged
-                  const previousStatusMap = new Map(
-                    currentDisplayed.map((s: any) => [s.id, s])
-                  );
-                  
-                  // Find new statuses (status.id doesn't exist in previous) - these will pulse
-                  const newStatusIds = new Set<string>(
-                    statuses
-                      .filter((s: any) => !previousStatusMap.has(s.id))
-                      .map((s: any) => String(s.user?.id || s.userId))
-                  );
-                  
-                  // Find changed statuses (same status.id but updatedAt changed) - these will also pulse
-                  const changedStatusIds = new Set<string>(
-                    statuses
-                      .filter((current: any) => {
-                        const previous = previousStatusMap.get(current.id);
-                        if (!previous) return false;
-                        return previous.updatedAt !== current.updatedAt;
-                      })
-                      .map((s: any) => String(s.user?.id || s.userId))
-                  );
-                  
-                  // Store all (new + changed) for sorting to top and animations
-                  newOrChangedContactIdsRef.current = new Set<string>([
-                    ...Array.from(newStatusIds),
-                    ...Array.from(changedStatusIds),
-                  ]);
-                  
-                  // Store only new IDs for pulse detection (only truly new items pulse)
-                  newOnlyIdsRef.current = newStatusIds;
-                  
-                  // Configure layout animation for smooth list reordering
-                  LayoutAnimation.configureNext({
-                    duration: 300,
-                    create: {
-                      type: LayoutAnimation.Types.easeInEaseOut,
-                      property: LayoutAnimation.Properties.opacity,
-                    },
-                    update: {
-                      type: LayoutAnimation.Types.easeInEaseOut,
-                    },
-                  });
-                  
-                  // CRITICAL: Update previousDisplayedStatusesRef with the OLD state BEFORE updating displayedStatuses
-                  // This ensures that when contactsWithStatus memo recalculates (triggered by setDisplayedStatuses),
-                  // it will compare the NEW displayedStatuses against this OLD baseline
-                  // Result: Items that were already visible and unchanged will NOT get pills
-                  // Only items that are NEW (didn't exist) or UPDATED (updatedAt changed) will get pills
-                  // IMPORTANT: This is the ONLY place where previousDisplayedStatusesRef should be updated
-                  // Pills are cleared here because this is the explicit pull-to-refresh action
-                  previousDisplayedStatusesRef.current = [...currentDisplayed];
-                  persistentState.previousDisplayedStatuses = [...currentDisplayed]; // Persist in module storage
-                  
-                  // Update displayed statuses with fresh data from API
-                  // This triggers contactsWithStatus memo to recalculate
-                  // The memo will compare new displayedStatuses against previousDisplayedStatusesRef (old baseline)
-                  // to determine which items should show "new" or "updated" pills
-                  // IMPORTANT: This is the ONLY place where displayedStatuses should be updated after initial load
-                  const newDisplayedStatuses = [...statuses];
-                  setDisplayedStatuses(newDisplayedStatuses);
-                  persistentState.displayedStatuses = newDisplayedStatuses; // Persist in module storage
-                  
-                  // Clear the new/changed flags after animation completes
-                  setTimeout(() => {
-                    newOrChangedContactIdsRef.current.clear();
-                    newOnlyIdsRef.current.clear();
-                  }, 500);
-                }
-                setHasNewUpdates(false);
-                // Banner stays visible, just text changes back to "listening"
-              }, 50);
+              
+              // Get the fresh statuses from the query result
+              const freshStatuses = statusesResult.data || statuses || [];
+              
+              if (freshStatuses.length > 0 || currentDisplayed.length > 0) {
+                // Map previous statuses by status.id (stable after backend UPDATE change)
+                // This map is used to identify which items are new vs updated vs unchanged
+                const previousStatusMap = new Map(
+                  currentDisplayed.map((s: any) => [s.id, s])
+                );
+                
+                // Find new statuses (status.id doesn't exist in previous) - these will pulse
+                const newStatusIds = new Set<string>(
+                  freshStatuses
+                    .filter((s: any) => !previousStatusMap.has(s.id))
+                    .map((s: any) => String(s.user?.id || s.userId))
+                );
+                
+                // Find changed statuses (same status.id but updatedAt changed) - these will also pulse
+                const changedStatusIds = new Set<string>(
+                  freshStatuses
+                    .filter((current: any) => {
+                      const previous = previousStatusMap.get(current.id);
+                      if (!previous) return false;
+                      return previous.updatedAt !== current.updatedAt;
+                    })
+                    .map((s: any) => String(s.user?.id || s.userId))
+                );
+                
+                // Store all (new + changed) for sorting to top and animations
+                newOrChangedContactIdsRef.current = new Set<string>([
+                  ...Array.from(newStatusIds),
+                  ...Array.from(changedStatusIds),
+                ]);
+                
+                // Store only new (not changed) for pulse animation
+                newOnlyIdsRef.current = newStatusIds;
+                
+                // Configure layout animation for smooth list reordering
+                LayoutAnimation.configureNext({
+                  duration: 300,
+                  create: {
+                    type: LayoutAnimation.Types.easeInEaseOut,
+                    property: LayoutAnimation.Properties.opacity,
+                  },
+                  update: {
+                    type: LayoutAnimation.Types.easeInEaseOut,
+                  },
+                });
+                
+                // CRITICAL: Update previousDisplayedStatusesRef BEFORE updating displayedStatuses
+                // This ensures the baseline is set correctly for the next comparison
+                previousDisplayedStatusesRef.current = [...currentDisplayed];
+                persistentState.previousDisplayedStatuses = [...currentDisplayed];
+                
+                // Now update displayedStatuses with fresh data from API
+                // This becomes the new "frozen" state until next refresh
+                setDisplayedStatuses(freshStatuses);
+                persistentState.displayedStatuses = freshStatuses;
+              }
+              
+              // Clear the "new updates" banner after refresh
+              setHasNewUpdates(false);
             }} 
           />
         }
