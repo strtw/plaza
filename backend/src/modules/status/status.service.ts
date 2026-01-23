@@ -126,9 +126,9 @@ export class StatusService {
         return [];
       }
 
-      // Query Friend table where friendUserId = current user (people who added current user)
-      // User A adds User B → User B sees User A's status
-      // Default: only ACCEPTED friends
+      // Query Friend table where friendUserId = current user (people who share with current user)
+      // User A shares with User B → User B sees User A's status
+      // Default: only ACCEPTED friends (exclude MUTED)
       // With includeMuted: ACCEPTED or MUTED friends
       // Never show PENDING or BLOCKED
       const statusFilter = includeMuted 
@@ -137,10 +137,10 @@ export class StatusService {
 
       const friends = await prisma.friend.findMany({
         where: { 
-          friendUserId: userId,  // People who added current user
+          friendUserId: userId,  // People who share with current user
           status: { in: statusFilter },
         },
-        select: { userId: true }, // Get the userId values (people who added current user)
+        select: { userId: true }, // Get the userId values (people who share with current user)
       });
 
       if (friends.length === 0) {
@@ -155,12 +155,26 @@ export class StatusService {
 
       const now = new Date();
 
-      // Fetch statuses for those users (people who added current user)
+      // Fetch statuses for those users (people who share with current user)
+      // Only include statuses that were shared with the current user (via sharedWith array)
+      // If sharedWith is empty, the status is not shared with anyone (legacy behavior: show all)
       const statuses = await prisma.status.findMany({
         where: {
-          userId: { in: friendUserIds },
-          startTime: { lte: now },
-          endTime: { gte: now },
+          AND: [
+            {
+              userId: { in: friendUserIds },
+              startTime: { lte: now },
+              endTime: { gte: now },
+            },
+            {
+              // Only show statuses that were shared with the current user
+              // OR statuses with empty sharedWith (legacy statuses before sharedWith was implemented)
+              OR: [
+                { sharedWith: { has: userId } },
+                { sharedWith: { equals: [] } },
+              ],
+            },
+          ],
         },
         include: {
           user: {

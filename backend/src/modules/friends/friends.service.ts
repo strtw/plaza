@@ -60,6 +60,7 @@ export class FriendsService {
           lastName: f.friendUser.lastName,
           email: f.friendUser.email,
           relationshipType: 'outgoing' as const, // → (I share with them)
+          friendStatus: f.status, // Include Friend status (ACCEPTED, MUTED, etc.)
         });
       });
 
@@ -71,6 +72,7 @@ export class FriendsService {
           lastName: f.user.lastName,
           email: f.user.email,
           relationshipType: 'incoming' as const, // ← (They share with me)
+          friendStatus: f.status, // Include Friend status (ACCEPTED, MUTED, etc.)
         });
       });
 
@@ -82,10 +84,13 @@ export class FriendsService {
 
         if (hasOutgoing && hasIncoming) {
           // Mutual: both directions exist
+          // For mutual, use the incoming status (they share with me) to determine if muted
           const friend = outgoingMap.get(friendId);
+          const incomingFriend = incomingMap.get(friendId);
           return {
             ...friend,
             relationshipType: 'mutual' as const, // ↔ (We both share with each other)
+            friendStatus: incomingFriend.friendStatus, // Use incoming status (they share with me)
           };
         } else if (hasOutgoing) {
           // Outgoing only

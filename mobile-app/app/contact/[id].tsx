@@ -1,6 +1,6 @@
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, Alert, Switch } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '../../lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -130,6 +130,13 @@ export default function ContactDetailScreen() {
         </View>
       </View>
       <ScrollView style={{ flex: 1, padding: 20 }}>
+        {/* Show everyone indicator if this contact is muted */}
+        {contact.friendStatus === 'MUTED' && (
+          <View style={styles.mutedIndicator}>
+            <Ionicons name="volume-mute" size={16} color="#999" />
+            <Text style={styles.mutedText}>User updates are muted</Text>
+          </View>
+        )}
         {status ? (
           <View>
             {showUpdatedComparison && parsedPreviousStatus ? (
@@ -276,6 +283,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1B5E20',
     marginBottom: 4,
+  },
+  mutedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    gap: 8,
+  },
+  mutedText: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
   },
 });
 

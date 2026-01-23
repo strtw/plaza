@@ -159,7 +159,7 @@ The Friend model represents a one-way relationship:
 - Filter by `status=ACCEPTED` (I've accepted their shares)
 - Never show statuses from friends where `status=PENDING`, `MUTED`, or `BLOCKED`
 
-**With "Show Muted" filter enabled:**
+**With "Show everyone" filter enabled:**
 - Query Friend records where `friendUserId=currentUser`
 - Filter by `status=ACCEPTED` OR `status=MUTED`
 - Still never show `PENDING` or `BLOCKED`
@@ -221,7 +221,7 @@ The Friend model represents a one-way relationship:
 - Friend record is created (if new) or updated (if existing) with MUTED status
 - Sharer's statuses hidden from recipient's main Activity feed
 - Recipient can still view sharer's status by:
-  - Toggling "Show Muted" in Activity tab
+  - Toggling "Show everyone" in Activity tab
   - Manually visiting sharer's profile
 - Sharer has no idea they were muted
 
@@ -377,7 +377,7 @@ The Friend model represents a one-way relationship:
 - Poll every 10 seconds
 
 **Muted Filter:**
-- Add toggle button "Show Muted"
+- Add toggle button "Show everyone"
 - When enabled, show statuses from both `ACCEPTED` and `MUTED` friends
 - Muted items should show visual indicator (bell with cross-out icon)
 
@@ -540,14 +540,14 @@ Step 4: User A accepts B's share
 
 **Mute:**
 - Sharer's statuses hidden from main Activity feed
-- Can toggle "Show Muted" to see them
+- Can toggle "Show everyone" to see them
 - Can manually visit sharer's profile
 - Sharer can still find you in search
 - Sharer can still see you in friends list
 - Low-key way to reduce noise
 
 **Block (Instagram-Style):**
-- Sharer's statuses never visible (even with "Show Muted")
+- Sharer's statuses never visible (even with "Show everyone")
 - Sharer cannot find you in search (you're filtered out)
 - Sharer cannot see you in friends list (you're filtered out)
 - Complete invisibility
@@ -687,7 +687,7 @@ Result: User B does NOT appear in search results
 - Accept/Mute/Block buttons work and invalidate queries
 - Blocked users don't appear in search
 - Blocked users don't appear in friends list
-- "Show Muted" toggle works in Activity tab
+- "Show everyone" toggle works in Activity tab
 - Muted statuses show visual indicator
 - Can view muted friend's status on their profile
 - Tab bar badge shows correct count

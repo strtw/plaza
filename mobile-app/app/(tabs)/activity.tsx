@@ -121,9 +121,14 @@ function ActivityScreenContent() {
     enabled: isLoaded && isSignedIn,
   });
 
+  // Check if any friends are muted
+  const hasMutedFriends = contacts?.some((c: any) => c.friendStatus === 'MUTED') || false;
+
+  const [showMuted, setShowMuted] = useState(false);
+
   const { data: statuses, refetch: refetchStatuses } = useQuery({
-    queryKey: ['friends-statuses'],
-    queryFn: api.getFriendsStatuses,
+    queryKey: ['friends-statuses', showMuted],
+    queryFn: () => api.getFriendsStatuses(showMuted),
     enabled: isLoaded && isSignedIn,
     refetchInterval: 10000, // Poll every 10 seconds
   });
@@ -346,6 +351,7 @@ function ActivityScreenContent() {
 
   // Initialize displayedStatuses from persistent storage or from statuses
   // This ensures state persists across component remounts (navigation)
+  // Also update when showMuted changes to reflect the filtered statuses
   useEffect(() => {
     if (statuses) {
       if (!persistentState.hasInitialized) {
@@ -373,6 +379,15 @@ function ActivityScreenContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statuses]);
+
+  // Update displayedStatuses when showMuted changes (to immediately reflect the filter)
+  useEffect(() => {
+    if (statuses) {
+      setDisplayedStatuses(statuses);
+      persistentState.displayedStatuses = statuses;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMuted]);
 
   // Keep persistent storage in sync with state
   useEffect(() => {
@@ -638,12 +653,18 @@ function ActivityScreenContent() {
     };
     
     const locationValue = locationMap[location];
+    
+    // Get all friend IDs for sharedWith (for now, share with all friends)
+    // TODO: Add UI for selecting specific recipients
+    const friendIds = contacts?.map((c: any) => c.id).filter(Boolean) || [];
+    
     console.log('[Activity] Creating status with:', {
       status: AvailabilityStatus.AVAILABLE,
       message: message.trim(),
       location: locationValue,
       startTime: new Date().toISOString(),
       endTime: endTime.toISOString(),
+      sharedWith: friendIds,
     });
     
     createStatusMutation.mutate({
@@ -652,6 +673,7 @@ function ActivityScreenContent() {
       location: locationValue,
       startTime: new Date().toISOString(), // Current time
       endTime: endTime.toISOString(),
+      sharedWith: friendIds, // Share with all friends by default
     });
   };
 
@@ -720,6 +742,21 @@ function ActivityScreenContent() {
     <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={[styles.headerContainer, { paddingTop: headerPaddingTop }]}>
         <Text style={styles.headerTitle}>Activity</Text>
+        {hasMutedFriends && (
+          <Pressable
+            onPress={() => setShowMuted(!showMuted)}
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 16,
+              backgroundColor: showMuted ? '#007AFF' : '#E5E5E5',
+            }}
+          >
+            <Text style={{ color: showMuted ? '#fff' : '#666', fontSize: 14, fontWeight: '500' }}>
+              {showMuted ? 'Hide muted' : 'Show everyone'}
+            </Text>
+          </Pressable>
+        )}
       </View>
       <Pressable 
         style={styles.statusInputContainer}

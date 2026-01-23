@@ -113,8 +113,9 @@ export class DevService {
         });
         console.log(`[DevService] Created friendship: mock user ${user.id} added primary user as friend`);
       } else {
-        // If friendship exists but is not ACCEPTED, update it to ACCEPTED
-        if (existingFriendship.status !== FriendStatus.ACCEPTED) {
+        // Only update to ACCEPTED if status is PENDING
+        // Preserve MUTED and BLOCKED statuses (user's explicit choices)
+        if (existingFriendship.status === FriendStatus.PENDING) {
           await prisma.friend.update({
             where: {
               userId_friendUserId: {
@@ -126,7 +127,9 @@ export class DevService {
               status: FriendStatus.ACCEPTED,
             },
           });
-          console.log(`[DevService] Updated existing friendship to ACCEPTED for mock user ${user.id}`);
+          console.log(`[DevService] Updated PENDING friendship to ACCEPTED for mock user ${user.id}`);
+        } else {
+          console.log(`[DevService] Preserving existing friendship status ${existingFriendship.status} for mock user ${user.id}`);
         }
       }
     }
@@ -247,17 +250,8 @@ export class DevService {
         },
       });
 
-      // Migrate any ACTIVE records to ACCEPTED (one-time migration for existing data)
-      const activeFriends = allFriendRecords.filter(f => f.status === 'ACTIVE');
-      if (activeFriends.length > 0) {
-        await prisma.$executeRaw`
-          UPDATE "Friend" 
-          SET "status" = 'ACCEPTED' 
-          WHERE "friendUserId" = ${primaryUser.id}::text 
-          AND "status" = 'ACTIVE'::"FriendStatus"
-        `;
-        console.log(`[DevService] Migrated ${activeFriends.length} ACTIVE friend records to ACCEPTED`);
-      }
+      // Note: ACTIVE migration removed - ACTIVE is not a valid FriendStatus enum value
+      // If legacy ACTIVE records exist, they would need to be handled via a database migration
 
       // Get people who have added the primary user as a friend
       // These are the users whose statuses will appear in the primary user's Activity tab

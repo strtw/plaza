@@ -46,6 +46,7 @@ export interface Contact extends User {
   relationshipType?: 'outgoing' | 'incoming' | 'mutual';
   isPending?: boolean;
   pendingStatus?: any;
+  friendStatus?: 'PENDING' | 'ACCEPTED' | 'MUTED' | 'BLOCKED'; // Friend relationship status
 }
 
 export interface ContactStatus {
