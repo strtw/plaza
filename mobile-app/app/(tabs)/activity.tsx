@@ -363,6 +363,12 @@ function ActivityScreenContent() {
         if (previousDisplayedStatusesRef.current.length === 0 && persistentState.previousDisplayedStatuses.length > 0) {
           previousDisplayedStatusesRef.current = [...persistentState.previousDisplayedStatuses];
         }
+        // If displayedStatuses is empty but statuses has data, update it (first time statuses appear)
+        // This handles the case where component mounted before statuses existed
+        if (displayedStatuses.length === 0 && statuses.length > 0) {
+          persistentState.displayedStatuses = statuses;
+          setDisplayedStatuses(statuses);
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -879,17 +885,17 @@ function ActivityScreenContent() {
         ListEmptyComponent={
           <View style={{ padding: 20, alignItems: 'center' }}>
             <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>
-              No contacts are sharing their status, for a better chance of seeing your friends here ,  <Pressable
+              No friends are sharing their current status, the more you invite the more activity you'll see! <Pressable
               onPress={() => {
                 router.push('/(tabs)/contacts?openInvite=true');
               }}
             >
               <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '600' }}>
-                invite more
+                Send Invites
               </Text>
             </Pressable> 
             </Text>
-          <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>Or lead the way and set yours now</Text>
+          <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>Or share your current status</Text>
           </View>
         }
       />
