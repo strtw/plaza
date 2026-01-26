@@ -331,8 +331,27 @@ export class DevService {
       };
 
       // Helper function to round UP to next 15-minute interval, then add random 15-minute intervals
+      // Randomly chooses between normal duration (15-120 minutes), short duration (5 minutes remaining), or very short (< 1 minute)
       const getEndTimeAt15MinuteInterval = (): Date => {
         const now = new Date();
+        const random = Math.random();
+        
+        // 15% chance to create a status with less than 1 minute remaining (30-45 seconds) for quick expiration testing
+        if (random < 0.15) {
+          const secondsToAdd = Math.floor(Math.random() * 16) + 30; // 30-45 seconds
+          const almostExpired = new Date(now);
+          almostExpired.setSeconds(almostExpired.getSeconds() + secondsToAdd);
+          return almostExpired;
+        }
+        
+        // 20% chance to create a status with only 5 minutes remaining (for testing expiration)
+        if (random < 0.35) {
+          const fiveMinutesFromNow = new Date(now);
+          fiveMinutesFromNow.setMinutes(fiveMinutesFromNow.getMinutes() + 5);
+          return fiveMinutesFromNow;
+        }
+        
+        // 65% chance: normal duration (15-120 minutes)
         const minutes = now.getMinutes();
         // Round UP to next 15-minute interval
         const roundedUpMinutes = Math.ceil(minutes / 15) * 15;

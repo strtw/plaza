@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { Contact, AvailabilityStatus, StatusLocation, getFullName } from '../lib/types';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,9 +9,11 @@ interface Props {
   isNew?: boolean; // Optional prop to indicate if this is a new/updated item
   isUpdated?: boolean; // Optional prop to indicate if this is an updated/changed item
   previousStatus?: any; // Previous status data for comparison (only when isUpdated is true)
+  statusState?: 'expired' | 'cleared' | null; // Status state for grayed-out display
+  textFadeAnim?: Animated.Value | null; // Animation for text fade when status is cleared
 }
 
-export function ContactListItem({ contact, isNew = false, isUpdated = false, previousStatus }: Props) {
+export function ContactListItem({ contact, isNew = false, isUpdated = false, previousStatus, statusState = null, textFadeAnim = null }: Props) {
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -33,17 +35,19 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false, pre
   };
 
   // Get time remaining until status expires
-  const getTimeRemaining = (): string => {
+  // For cleared statuses, show time even if expired (will be strike-through)
+  const getTimeRemaining = (showForCleared: boolean = false): string => {
     if (!contact.status?.endTime) return '';
     const end = new Date(contact.status.endTime);
     const diffMs = end.getTime() - currentTime.getTime();
 
-    // Guard clause: if expired, return empty string
-    if (diffMs <= 0) {
+    // For cleared statuses, show time even if expired (will be strike-through)
+    // For other statuses, return empty string if expired
+    if (diffMs <= 0 && !showForCleared) {
       return '';
     }
 
-    const diffMinutes = Math.floor(diffMs / 60000);
+    const diffMinutes = Math.floor(Math.abs(diffMs) / 60000);
     const diffHours = Math.floor(diffMinutes / 60);
     const remainingMinutes = diffMinutes % 60;
 
@@ -142,17 +146,29 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false, pre
     router.push(`/contact/${contact.id}${queryString}`);
   };
 
+  const isExpiredOrCleared = statusState === 'expired' || statusState === 'cleared';
+
   return (
     <Pressable
       onPress={handlePress}
-      style={styles.container}
+      style={[
+        styles.container,
+        isExpiredOrCleared && styles.containerDisabled
+      ]}
+      disabled={isExpiredOrCleared}
     >
       <View style={styles.avatarContainer}>
-        <View style={[styles.avatar, { backgroundColor: getAvatarColor() }]}>
-          <Text style={styles.avatarText}>{getInitials()}</Text>
+        <View style={[
+          styles.avatar, 
+          { backgroundColor: isExpiredOrCleared ? '#E5E5E5' : getAvatarColor() }
+        ]}>
+          <Text style={[
+            styles.avatarText,
+            isExpiredOrCleared && styles.avatarTextDisabled
+          ]}>{getInitials()}</Text>
         </View>
         {/* Pill below avatar */}
-        {(isNew || isUpdated) && (
+        {(isNew || isUpdated) && !isExpiredOrCleared && (
           <View style={styles.pillOverlay}>
             <Text style={styles.pillText}>{isNew ? 'new' : 'updated'}</Text>
           </View>
@@ -161,18 +177,63 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false, pre
       <View style={styles.content}>
         <View style={styles.nameRow}>
           <View style={styles.nameAndStatus}>
-            <Text style={styles.name} numberOfLines={1}>
+            <Text style={[
+              styles.name,
+              isExpiredOrCleared && styles.nameDisabled
+            ]} numberOfLines={1}>
               {displayName}
             </Text>
-            {contact.status?.message && (
-              <Text style={styles.statusText} numberOfLines={1}>
+            {/* Show status message - fade transition for cleared/expired statuses */}
+            {statusState === 'cleared' ? (
+              <View style={styles.statusTextContainer}>
+                {/* Original text fading out */}
+                {contact.status?.message && textFadeAnim && (
+                  <Animated.Text 
+                    style={[
+                      styles.statusText,
+                      isExpiredOrCleared && styles.statusTextDisabled,
+                      styles.statusTextAbsolute,
+                      { opacity: textFadeAnim }
+                    ]} 
+                    numberOfLines={1}
+                  >
+                    {contact.status.message}
+                  </Animated.Text>
+                )}
+                {/* Cleared message fading in */}
+                <Animated.Text 
+                  style={[
+                    styles.statusText,
+                    styles.statusTextCleared,
+                    styles.statusTextItalic,
+                    styles.statusTextAbsolute,
+                    textFadeAnim ? { opacity: Animated.subtract(1, textFadeAnim) } : { opacity: 1 }
+                  ]} 
+                  numberOfLines={1}
+                >
+                  Status cleared by user
+                </Animated.Text>
+              </View>
+            ) : statusState === 'expired' ? (
+              <Text style={[
+                styles.statusText,
+                styles.statusTextCleared,
+                isExpiredOrCleared && styles.statusTextDisabled
+              ]} numberOfLines={1}>
+                Status expired
+              </Text>
+            ) : contact.status?.message ? (
+              <Text style={[
+                styles.statusText,
+                isExpiredOrCleared && styles.statusTextDisabled
+              ]} numberOfLines={1}>
                 {contact.status.message}
               </Text>
-            )}
+            ) : null}
           </View>
           <View style={styles.rightIcons}>
             {/* Mute bell icon for muted users - positioned left of time remaining */}
-            {contact.friendStatus === 'MUTED' && (
+            {contact.friendStatus === 'MUTED' && !isExpiredOrCleared && (
               <Ionicons 
                 name="notifications-off" 
                 size={16} 
@@ -180,13 +241,23 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false, pre
                 style={styles.muteIcon}
               />
             )}
-            {/* Time remaining bubble - positioned left of location icon */}
-            {contact.status && !isStatusExpiredOrExpiringSoon() && (
-              <View style={[styles.timeBubble, { backgroundColor: getStatusColor() }]}>
-                <Text style={styles.timeBubbleText}>{getTimeRemaining()}</Text>
-              </View>
+            {/* Time remaining bubble or expired pill - positioned left of location icon */}
+            {contact.status && statusState !== 'cleared' && (
+              <>
+                {statusState === 'expired' ? (
+                  // Show red "expired" pill when expired
+                  <View style={[styles.timeBubble, styles.expiredBubble]}>
+                    <Text style={styles.timeBubbleText}>expired</Text>
+                  </View>
+                ) : !isStatusExpiredOrExpiringSoon() ? (
+                  // Normal time bubble when active
+                  <View style={[styles.timeBubble, { backgroundColor: getStatusColor() }]}>
+                    <Text style={styles.timeBubbleText}>{getTimeRemaining()}</Text>
+                  </View>
+                ) : null}
+              </>
             )}
-            {locationIcon && (
+            {locationIcon && !isExpiredOrCleared && (
               <Ionicons 
                 name={locationIcon} 
                 size={20} 
@@ -210,6 +281,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E5E5E5',
+  },
+  containerDisabled: {
+    backgroundColor: '#E5E5E5',
+    opacity: 0.6,
   },
   avatarContainer: {
     position: 'relative',
@@ -279,10 +354,43 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#000',
   },
+  nameDisabled: {
+    color: '#999',
+  },
+  statusTextContainer: {
+    position: 'relative',
+    height: 20, // Fixed height to prevent layout shift
+    marginTop: 2,
+  },
   statusText: {
     fontSize: 14,
     color: '#667781',
     marginTop: 2,
+  },
+  statusTextAbsolute: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    marginTop: 0,
+  },
+  statusTextDisabled: {
+    color: '#999',
+  },
+  statusTextCleared: {
+    color: '#999',
+  },
+  statusTextItalic: {
+    fontStyle: 'italic',
+  },
+  avatarTextDisabled: {
+    color: '#999',
+  },
+  expiredBubble: {
+    backgroundColor: '#F44336', // Red for expired
+  },
+  timeBubbleStrikethrough: {
+    textDecorationLine: 'line-through',
   },
   rightIcons: {
     flexDirection: 'row',

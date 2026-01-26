@@ -1,4 +1,4 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, LayoutAnimation, UIManager, PanResponder } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, Easing, LayoutAnimation, UIManager, PanResponder } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
@@ -225,6 +225,8 @@ const SwipeableContactListItem = ({
           isNew={isNew}
           isUpdated={isUpdated}
           previousStatus={previousStatus}
+          statusState={contact.statusState}
+          textFadeAnim={contact.textFadeAnim}
         />
       </Animated.View>
     </View>
@@ -279,6 +281,16 @@ function ActivityScreenContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { currentStatus: storeStatus, setCurrentStatus } = useUserStore();
+  
+  // Track status state: 'active' | 'expired' | 'cleared' | null
+  // 'expired': Status expired naturally (endTime passed)
+  // 'cleared': User manually cleared the status
+  // 'active': Status is active and valid
+  // null: No status
+  const [statusState, setStatusState] = useState<'active' | 'expired' | 'cleared' | null>(null);
+  
+  // Fade-to-gray animation for when status expires/clears (opacity transition)
+  const statusGrayAnim = useRef(new Animated.Value(1)).current;
   
   // Track which row is currently swiped open (only one at a time)
   const [openRowId, setOpenRowId] = useState<string | null>(null);
@@ -339,32 +351,56 @@ function ActivityScreenContent() {
   useEffect(() => {
     if (currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)) {
       setCurrentStatus(currentStatus);
+      setStatusState('active'); // Status is active
+    } else if (currentStatus && isStatusExpiredOrExpiringSoon(currentStatus)) {
+      // Status exists but is expired - keep it for display but mark as expired
+      // Only update if we don't already have an expired/cleared state (preserve user's cleared state)
+      if (statusState !== 'cleared') {
+        setCurrentStatus(currentStatus);
+        setStatusState('expired');
+      }
     } else {
-      setCurrentStatus(null); // Clear if expired or expiring soon
+      // No status from API - only clear if we don't have a stored expired/cleared status
+      // This allows expired/cleared statuses to persist until refresh
+      if (statusState === null || statusState === 'active') {
+        setCurrentStatus(null);
+        setStatusState(null);
+      }
+      // If statusState is 'expired' or 'cleared', keep the storeStatus for display
     }
-  }, [currentStatus, setCurrentStatus]);
+  }, [currentStatus, setCurrentStatus, statusState]);
 
-  // Timer effect to clear expired status immediately (checks every 10 seconds)
+  // Timer effect to detect expired status (checks every 10 seconds)
+  // When expired, set statusState to 'expired' but keep status data for display
+  // Also trigger fade-to-gray animation
   useEffect(() => {
     if (!storeStatus || !storeStatus.endTime) return;
     
     const checkExpiration = () => {
-      const now = new Date(); // Use new Date() directly, not currentTime state
+      const now = new Date();
       const end = new Date(storeStatus.endTime);
-      if (end.getTime() <= now.getTime()) {
-        // Clear from both store and query cache
-        setCurrentStatus(null);
+      if (end.getTime() <= now.getTime() && statusState === 'active') {
+        // Status just expired - mark as expired but keep data for display
+        setStatusState('expired');
+        // Also update query cache to null so API doesn't return expired status
         queryClient.setQueryData(['my-status'], null);
+        // Trigger fade-to-gray animation with smooth easing
+        Animated.timing(statusGrayAnim, {
+          toValue: 0.6,
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }).start();
       }
     };
     
     // Check immediately
     checkExpiration();
     
-    // Then check every 10 seconds (more frequent than currentTime updates)
+    // Then check every 10 seconds
     const interval = setInterval(checkExpiration, 10000);
     return () => clearInterval(interval);
-  }, [storeStatus, setCurrentStatus, queryClient]);
+  }, [storeStatus, statusState, queryClient, statusGrayAnim]);
 
   const createStatusMutation = useMutation({
     mutationFn: api.createStatus,
@@ -388,6 +424,10 @@ function ActivityScreenContent() {
       // Optimistically update cache and store immediately
       queryClient.setQueryData(['my-status'], optimisticStatus);
       setCurrentStatus(optimisticStatus);
+      setStatusState('active'); // New status is active
+      // Reset fade animations in case they were previously faded out/grayed
+      statusFadeAnim.setValue(1);
+      statusGrayAnim.setValue(1);
       
       return { previousStatus };
     },
@@ -395,7 +435,8 @@ function ActivityScreenContent() {
       // Update with real data from server (includes real ID and all fields)
       queryClient.setQueryData(['my-status'], data);
       setCurrentStatus(data as ContactStatus);
-      
+      setStatusState('active'); // New status is active
+
       // Invalidate to ensure everything is in sync
       queryClient.invalidateQueries({ queryKey: ['my-status'] });
       queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
@@ -420,14 +461,22 @@ function ActivityScreenContent() {
   const deleteStatusMutation = useMutation({
     mutationFn: api.deleteMyStatus,
     onMutate: async () => {
-      // Optimistic update: immediately remove from store
-      setCurrentStatus(null);
       // Cancel outgoing queries
       await queryClient.cancelQueries({ queryKey: ['my-status'] });
       // Snapshot previous value
       const previousStatus = queryClient.getQueryData(['my-status']);
-      // Optimistically set to null
+      // Mark as cleared but keep status data for display until refresh
+      // Don't clear storeStatus - we need it to show "Status cleared by user" message
+      setStatusState('cleared');
+      // Optimistically set query cache to null
       queryClient.setQueryData(['my-status'], null);
+      // Trigger fade-to-gray animation with smooth easing
+      Animated.timing(statusGrayAnim, {
+        toValue: 0.6,
+        duration: 300,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
       return { previousStatus };
     },
     onSuccess: () => {
@@ -441,6 +490,7 @@ function ActivityScreenContent() {
       if (context?.previousStatus) {
         queryClient.setQueryData(['my-status'], context.previousStatus);
         setCurrentStatus(context.previousStatus as any);
+        setStatusState('active'); // Restore to active state
       }
       Alert.alert('Error', error.message || 'Failed to clear status. Please try again.');
     },
@@ -610,10 +660,21 @@ function ActivityScreenContent() {
   const [displayedStatuses, setDisplayedStatuses] = useState<Array<any>>(
     persistentState.hasInitialized ? persistentState.displayedStatuses : []
   );
+  // Track which status IDs are expired or cleared (for grayed-out display)
+  // Map: statusId -> 'expired' | 'cleared' | null
+  const [expiredOrClearedStatuses, setExpiredOrClearedStatuses] = useState<Map<string, 'expired' | 'cleared'>>(new Map());
   // Initialize banner opacity to 1 (always visible) to prevent layout shifts
   const bannerOpacity = useRef(new Animated.Value(1)).current;
   // Pulse animation for when updates are detected
   const bannerPulse = useRef(new Animated.Value(1)).current;
+  // Fade-out animation for expired/cleared status
+  const statusFadeAnim = useRef(new Animated.Value(1)).current;
+  // Fade-out animations for individual expired/cleared friend statuses
+  const friendStatusFadeAnims = useRef<Map<string, Animated.Value>>(new Map()).current;
+  // Fade-to-gray animations for friend statuses (opacity transition when expired/cleared)
+  const friendStatusGrayAnims = useRef<Map<string, Animated.Value>>(new Map()).current;
+  // Animation refs for text fade when statuses are cleared (original text fades out, cleared message fades in)
+  const friendStatusTextFadeAnims = useRef<Map<string, Animated.Value>>(new Map()).current;
   // Ref to store previous displayedStatuses for comparison (to detect new/updated items)
   // This represents the baseline that the user saw BEFORE the last refresh
   // Updated in refresh handler BEFORE displayedStatuses changes
@@ -679,6 +740,89 @@ function ActivityScreenContent() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Detect when friend statuses expire or are cleared (via polling)
+  // Automatically gray them out without requiring refresh
+  useEffect(() => {
+    if (!statuses || !displayedStatuses.length) return;
+
+    const now = new Date();
+    const updatedExpiredOrCleared = new Map(expiredOrClearedStatuses);
+
+    // Check each displayed status
+    displayedStatuses.forEach((displayedStatus: any) => {
+      if (!displayedStatus.id) return;
+
+      // Check if status expired (endTime passed)
+      if (displayedStatus.endTime) {
+        const end = new Date(displayedStatus.endTime);
+        if (end.getTime() <= now.getTime()) {
+          // Status expired - mark as expired if not already marked
+          if (!updatedExpiredOrCleared.has(displayedStatus.id)) {
+            updatedExpiredOrCleared.set(displayedStatus.id, 'expired');
+          }
+        }
+      }
+
+      // Check if status was cleared (no longer exists in fresh statuses)
+      const stillExists = statuses.some((s: any) => s.id === displayedStatus.id);
+      if (!stillExists && displayedStatus.endTime) {
+        // Status was cleared - mark as cleared if not already marked
+        // Only mark as cleared if it wasn't already expired (expired takes precedence)
+        if (!updatedExpiredOrCleared.has(displayedStatus.id)) {
+          updatedExpiredOrCleared.set(displayedStatus.id, 'cleared');
+        }
+      }
+    });
+
+    // Update state if anything changed and trigger fade-to-gray animations
+    const newlyExpiredOrCleared = new Set<string>();
+    updatedExpiredOrCleared.forEach((state, id) => {
+      if (!expiredOrClearedStatuses.has(id)) {
+        newlyExpiredOrCleared.add(id);
+      }
+    });
+
+    // Trigger fade-to-gray animation for newly expired/cleared statuses
+    newlyExpiredOrCleared.forEach((statusId) => {
+      const state = updatedExpiredOrCleared.get(statusId);
+      let grayAnim = friendStatusGrayAnims.get(statusId);
+      if (!grayAnim) {
+        grayAnim = new Animated.Value(1);
+        friendStatusGrayAnims.set(statusId, grayAnim);
+      }
+      // Fade to gray (opacity 1 → 0.6) over 300ms with smooth easing
+      Animated.timing(grayAnim, {
+        toValue: 0.6,
+        duration: 300,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start(() => {
+        // After gray animation completes, if status is cleared, fade text transition
+        if (state === 'cleared') {
+          let textFadeAnim = friendStatusTextFadeAnims.get(statusId);
+          if (!textFadeAnim) {
+            textFadeAnim = new Animated.Value(1); // Start at 1 (original text visible)
+            friendStatusTextFadeAnims.set(statusId, textFadeAnim);
+          }
+          // Fade out original text (1 → 0) over 200ms, then cleared message will fade in
+          Animated.timing(textFadeAnim, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        }
+      });
+    });
+
+    // Update state if anything changed
+    if (updatedExpiredOrCleared.size !== expiredOrClearedStatuses.size ||
+        Array.from(updatedExpiredOrCleared.entries()).some(([id, state]) => 
+          expiredOrClearedStatuses.get(id) !== state
+        )) {
+      setExpiredOrClearedStatuses(updatedExpiredOrCleared);
+    }
+  }, [statuses, displayedStatuses, currentTime, expiredOrClearedStatuses]);
 
   // Detect status changes to show "New updates" indicator
   // Requirements:
@@ -898,9 +1042,13 @@ function ActivityScreenContent() {
         ? previousStatusMap.get(status.id)
         : undefined;
 
+      // Check if this status is expired or cleared
+      const statusState = status ? expiredOrClearedStatuses.get(status.id) : null;
+
       const result = {
         ...contact,
         status,
+        statusState, // 'expired' | 'cleared' | null
         isNewOrChanged,
         isNewOnly,
         isNew, // For pill display
@@ -911,7 +1059,7 @@ function ActivityScreenContent() {
       return result;
     }) || [];
     return result;
-  }, [contacts, displayedStatuses]); // Removed showMuted - filtering happens in activeContacts
+  }, [contacts, displayedStatuses, Array.from(expiredOrClearedStatuses.entries())]); // Include expiredOrClearedStatuses so statusState updates trigger re-render
 
   // Filter to only show contacts with active statuses and sort: NEW first, then UPDATED, then unchanged
   // Backend already filters statuses by time window (startTime <= now <= endTime)
@@ -1025,7 +1173,7 @@ function ActivityScreenContent() {
         <Text style={styles.updateBannerText}>
           {hasNewUpdates 
             ? "New updates! Pull down to refresh" 
-            : "Listening for status updates"}
+            : "Listening for updates"}
         </Text>
       </Animated.View>
     );
@@ -1071,78 +1219,145 @@ function ActivityScreenContent() {
                         </Pressable>
                       )}
       </View>
-      <Pressable 
-        style={styles.statusInputContainer}
-        onPress={() => {
-          // Populate form with current status if it exists, otherwise reset
-          if (storeStatus) {
-            setMessage(storeStatus.message);
-            setLocation(mapBackendToFrontendLocation(storeStatus.location));
-            setEndTime(new Date(storeStatus.endTime));
-          } else {
-            setMessage('');
-            setLocation(null);
-            setEndTime(getDefaultEndTime());
-          }
-          setShowStatusModal(true);
-        }}
-      >
-        <View style={styles.statusInputWrapper}>
-          {/* Avatar placeholder with status-aware styling */}
-          <View style={[
-            styles.avatarContainer,
-            (!storeStatus || !currentStatus) 
-              ? styles.avatarContainerInactive 
-              : (storeStatus.status === AvailabilityStatus.AVAILABLE 
-                  ? styles.avatarContainerActive 
-                  : styles.avatarContainerInactive)
-          ]}>
-            <View style={[
-              styles.avatar,
-              (!storeStatus || !currentStatus) 
-                ? { backgroundColor: '#E5E5E5' }
-                : { backgroundColor: getAvatarColor() }
-            ]}>
-              <Text style={styles.avatarText}>{getInitials()}</Text>
-            </View>
-          </View>
-          <TextInput
-            style={styles.statusInput}
-            placeholder="Whatcha up to?"
-            placeholderTextColor="#333"
-            editable={false}
-            pointerEvents="none"
-            value={
-              currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)
-                ? `${currentStatus.message}...for ${getTimeRemaining(currentStatus.endTime)}`
-                : ''
+      <Animated.View style={{ opacity: Animated.multiply(statusFadeAnim, statusGrayAnim) }}>
+        <Pressable 
+          style={[
+            styles.statusInputContainer,
+            (statusState === 'expired' || statusState === 'cleared') && styles.statusInputContainerDisabled
+          ]}
+          onPress={() => {
+            // Don't allow opening modal if status is expired or cleared
+            if (statusState === 'expired' || statusState === 'cleared') {
+              return;
             }
-            numberOfLines={1}
-          />
-        </View>
-      </Pressable>
+            // Populate form with current status if it exists, otherwise reset
+            if (storeStatus) {
+              setMessage(storeStatus.message);
+              setLocation(mapBackendToFrontendLocation(storeStatus.location));
+              setEndTime(new Date(storeStatus.endTime));
+            } else {
+              setMessage('');
+              setLocation(null);
+              setEndTime(getDefaultEndTime());
+            }
+            setShowStatusModal(true);
+          }}
+          disabled={statusState === 'expired' || statusState === 'cleared'}
+        >
+          <View style={styles.statusInputWrapper}>
+            {/* Avatar placeholder with status-aware styling */}
+            <View style={[
+              styles.avatarContainer,
+              (statusState === 'expired' || statusState === 'cleared')
+                ? styles.avatarContainerDisabled
+                : (!storeStatus || !currentStatus) 
+                  ? styles.avatarContainerInactive 
+                  : (storeStatus.status === AvailabilityStatus.AVAILABLE 
+                      ? styles.avatarContainerActive 
+                      : styles.avatarContainerInactive)
+            ]}>
+              <View style={[
+                styles.avatar,
+                (statusState === 'expired' || statusState === 'cleared')
+                  ? styles.avatarDisabled
+                  : (!storeStatus || !currentStatus) 
+                    ? { backgroundColor: '#E5E5E5' }
+                    : { backgroundColor: getAvatarColor() }
+              ]}>
+                <Text style={[
+                  styles.avatarText,
+                  (statusState === 'expired' || statusState === 'cleared') && styles.avatarTextDisabled
+                ]}>{getInitials()}</Text>
+              </View>
+            </View>
+            <TextInput
+              style={[
+                styles.statusInput,
+                (statusState === 'expired' || statusState === 'cleared') && styles.statusInputDisabled
+              ]}
+              placeholder="Whatcha up to?"
+              placeholderTextColor="#333"
+              editable={false}
+              pointerEvents="none"
+              value={
+                statusState === 'cleared'
+                  ? 'Status cleared by user'
+                  : statusState === 'expired'
+                    ? 'Status expired'
+                    : currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)
+                      ? `${currentStatus.message}...for ${getTimeRemaining(currentStatus.endTime)}`
+                      : ''
+              }
+              numberOfLines={1}
+            />
+          </View>
+        </Pressable>
+      </Animated.View>
       <FlatList
         data={activeContacts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
-          // Wrap AnimatedContactListItem in SwipeableContactListItem for swipe functionality
-          if (item.isNewOrChanged) {
-            return (
-              <SwipeableContactListItem 
-                contact={item} 
-                isNew={item.isNew}
-                isUpdated={item.isUpdated}
-                previousStatus={item.previousStatus || item.previousStatus}
-                onMute={handleMuteFriend}
-                openRowId={openRowId}
-                setOpenRowId={setOpenRowId}
-                locallyMutedContacts={locallyMutedContacts}
-              />
-            );
-          }
-          return (
+          // Get fade animations for this item if it's expired/cleared
+          const statusId = item.status?.id;
+          const isExpiredOrCleared = statusId && expiredOrClearedStatuses.has(statusId);
+          
+          // Get fade-to-gray animation (for automatic graying when expired/cleared)
+          const grayAnim = isExpiredOrCleared
+            ? (() => {
+                let anim = friendStatusGrayAnims.get(statusId);
+                if (!anim) {
+                  anim = new Animated.Value(1);
+                  friendStatusGrayAnims.set(statusId, anim);
+                }
+                return anim;
+              })()
+            : null;
+          
+          // Get fade-out animation (for fade-out on refresh)
+          const fadeAnim = isExpiredOrCleared
+            ? (() => {
+                let anim = friendStatusFadeAnims.get(statusId);
+                if (!anim) {
+                  anim = new Animated.Value(1);
+                  friendStatusFadeAnims.set(statusId, anim);
+                }
+                return anim;
+              })()
+            : null;
+
+          // Get text fade animation (for cleared statuses - original text fades out, cleared message fades in)
+          const textFadeAnim = (item.statusState === 'cleared' && statusId)
+            ? (() => {
+                let anim = friendStatusTextFadeAnims.get(statusId);
+                if (!anim) {
+                  anim = new Animated.Value(1); // Start at 1 (original text visible)
+                  friendStatusTextFadeAnims.set(statusId, anim);
+                }
+                return anim;
+              })()
+            : null;
+
+          // Wrap in Animated.View if expired/cleared for fade-out
+          const contactWithStatusState = {
+            ...item,
+            statusState: item.statusState, // Pass statusState to ContactListItem
+            textFadeAnim, // Pass text fade animation for cleared statuses
+          };
+          
+          const content = item.isNewOrChanged ? (
             <SwipeableContactListItem 
-              contact={item} 
+              contact={contactWithStatusState} 
+              isNew={item.isNew}
+              isUpdated={item.isUpdated}
+              previousStatus={item.previousStatus || item.previousStatus}
+              onMute={handleMuteFriend}
+              openRowId={openRowId}
+              setOpenRowId={setOpenRowId}
+              locallyMutedContacts={locallyMutedContacts}
+            />
+          ) : (
+            <SwipeableContactListItem 
+              contact={contactWithStatusState} 
               isNew={item.isNew}
               isUpdated={item.isUpdated}
               previousStatus={item.previousStatus}
@@ -1152,6 +1367,20 @@ function ActivityScreenContent() {
               locallyMutedContacts={locallyMutedContacts}
             />
           );
+
+          // Combine gray and fade animations if expired/cleared
+          if (grayAnim || fadeAnim) {
+            const opacityAnim = grayAnim && fadeAnim
+              ? Animated.multiply(grayAnim, fadeAnim) // Both: gray first, then fade out
+              : grayAnim || fadeAnim; // One or the other
+            return (
+              <Animated.View style={{ opacity: opacityAnim }}>
+                {content}
+              </Animated.View>
+            );
+          }
+
+          return content;
         }}
         ListHeaderComponent={renderUpdateBanner}
         refreshControl={
@@ -1171,6 +1400,58 @@ function ActivityScreenContent() {
               
               // Get the fresh statuses from the query result
               const freshStatuses = statusesResult.data || statuses || [];
+              
+              // Fade out expired/cleared friend statuses before removing them
+              const statusesToFadeOut = Array.from(expiredOrClearedStatuses.keys());
+              if (statusesToFadeOut.length > 0) {
+                // Create fade animations for each expired/cleared status
+                const fadePromises = statusesToFadeOut.map((statusId) => {
+                  let fadeAnim = friendStatusFadeAnims.get(statusId);
+                  if (!fadeAnim) {
+                    fadeAnim = new Animated.Value(1);
+                    friendStatusFadeAnims.set(statusId, fadeAnim);
+                  }
+                  
+                  return new Promise<void>((resolve) => {
+                    Animated.timing(fadeAnim!, {
+                      toValue: 0,
+                      duration: 600, // 2x slower: 600ms instead of 300ms
+                      useNativeDriver: true,
+                    }).start(() => {
+                      resolve();
+                    });
+                  });
+                });
+
+                // Wait for all fade animations to complete
+                await Promise.all(fadePromises);
+                
+                // Clear expired/cleared statuses after fade-out
+                setExpiredOrClearedStatuses(new Map());
+                // Clean up fade animations
+                statusesToFadeOut.forEach((statusId) => {
+                  friendStatusFadeAnims.delete(statusId);
+                  friendStatusGrayAnims.delete(statusId);
+                  friendStatusTextFadeAnims.delete(statusId);
+                });
+              }
+              
+              // If user's own status is expired or cleared, fade it out when user refreshes
+              if ((statusState === 'expired' || statusState === 'cleared') && storeStatus) {
+                // Trigger fade-out animation (2x slower: 600ms instead of 300ms)
+                Animated.timing(statusFadeAnim, {
+                  toValue: 0,
+                  duration: 600,
+                  useNativeDriver: true,
+                }).start(() => {
+                  // After animation completes, clear the status state
+                  setCurrentStatus(null);
+                  setStatusState(null);
+                  // Reset fade animations for next time
+                  statusFadeAnim.setValue(1);
+                  statusGrayAnim.setValue(1);
+                });
+              }
               
               if (freshStatuses.length > 0 || currentDisplayed.length > 0) {
                 // Map previous statuses by status.id (stable after backend UPDATE change)
@@ -1520,6 +1801,25 @@ const styles = StyleSheet.create({
     color: '#000',
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  statusInputContainerDisabled: {
+    backgroundColor: '#E5E5E5',
+    opacity: 0.6,
+  },
+  statusInputDisabled: {
+    backgroundColor: '#E5E5E5',
+    color: '#999',
+    borderColor: '#CCCCCC',
+  },
+  avatarContainerDisabled: {
+    borderColor: '#CCCCCC',
+    opacity: 0.6,
+  },
+  avatarDisabled: {
+    backgroundColor: '#E5E5E5',
+  },
+  avatarTextDisabled: {
+    color: '#999',
   },
   modalContainer: {
     flex: 1,
