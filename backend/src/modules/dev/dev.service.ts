@@ -255,13 +255,17 @@ export class DevService {
 
       // Get people who have added the primary user as a friend
       // These are the users whose statuses will appear in the primary user's Activity tab
+      // Include both ACCEPTED and MUTED friends so we can test the toggle functionality
       const friendRecords = await prisma.friend.findMany({
         where: {
           friendUserId: primaryUser.id, // People who added the primary user
-          status: FriendStatus.ACCEPTED,
+          status: {
+            in: [FriendStatus.ACCEPTED, FriendStatus.MUTED], // Include both ACCEPTED and MUTED
+          },
         },
         select: {
           userId: true, // The users who added the primary user
+          status: true, // Include status so we can log it
         },
         take: 10, // Max 10 users
       });
@@ -274,6 +278,11 @@ export class DevService {
       }
 
       const userIds = friendRecords.map(f => f.userId).filter(Boolean);
+      
+      // Log friend statuses for debugging
+      const acceptedCount = friendRecords.filter(f => f.status === FriendStatus.ACCEPTED).length;
+      const mutedCount = friendRecords.filter(f => f.status === FriendStatus.MUTED).length;
+      console.log(`[DevService] Found ${friendRecords.length} friends: ${acceptedCount} ACCEPTED, ${mutedCount} MUTED`);
 
       // Fetch user details for these IDs (people broadcasting to the primary user)
       const testUsers = await prisma.user.findMany({

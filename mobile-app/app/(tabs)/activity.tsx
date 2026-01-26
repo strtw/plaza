@@ -681,37 +681,68 @@ function ActivityScreenContent() {
   }, []);
 
   // Detect status changes to show "New updates" indicator
-  // Compare current statuses (from polling) with displayedStatuses (what user sees)
-  // Only trigger when there are actual new/updated statuses, not filter changes
-  // Note: showMuted is NOT in dependencies - filter changes should not trigger comparison
+  // Requirements:
+  // - If showMuted is false: only ACCEPTED friends' updates trigger banner
+  // - If showMuted is true: ANY friend's (MUTED or ACCEPTED) updates trigger banner
+  // - Expired statuses should NOT trigger banner
   useEffect(() => {
     // Don't run comparison on first load - wait until displayedStatuses is initialized
-    // This prevents false "new updates" detection when toggling showMuted before first refresh
     if (!persistentState.hasInitialized) {
       setHasNewUpdates(false);
       return;
     }
 
     if (!statuses || displayedStatuses.length === 0) {
-      // If no displayed statuses yet, don't show banner
       setHasNewUpdates(false);
       return;
     }
 
-    // Compare unfiltered statuses to detect actual changes
-    // We compare the raw statuses, not filtered versions, to avoid filter-induced false positives
-    const currentStatusIds = new Set(statuses.map((s: any) => s.id));
-    const displayedStatusIds = new Set(displayedStatuses.map((s: any) => s.id));
+    // Helper to check if status is expired
+    const isExpired = (s: any): boolean => {
+      if (!s || !s.endTime) return true;
+      const end = new Date(s.endTime);
+      const now = new Date();
+      return end.getTime() <= now.getTime();
+    };
 
-    // Check for new or removed statuses
-    const hasNewStatuses = statuses.some((s: any) => !displayedStatusIds.has(s.id));
-    const hasRemovedStatuses = displayedStatuses.some(
+    // Filter out expired statuses from both current and displayed
+    const activeStatuses = statuses.filter((s: any) => !isExpired(s));
+    const activeDisplayedStatuses = displayedStatuses.filter((s: any) => !isExpired(s));
+
+    // Filter based on showMuted and friendStatus
+    // When showMuted is false: only check ACCEPTED friends (not MUTED)
+    // When showMuted is true: check ALL friends (MUTED and ACCEPTED)
+    const visibleStatuses = activeStatuses.filter((s: any) => {
+      const contact = contacts?.find((c: any) => c.id === s.user?.id || c.id === s.userId);
+      if (!contact) return false;
+      // If showMuted is false, only include ACCEPTED friends (exclude MUTED)
+      if (!showMuted && contact.friendStatus === 'MUTED') return false;
+      // If showMuted is true, include all friends (MUTED and ACCEPTED)
+      return true;
+    });
+    
+    const visibleDisplayedStatuses = activeDisplayedStatuses.filter((s: any) => {
+      const contact = contacts?.find((c: any) => c.id === s.user?.id || c.id === s.userId);
+      if (!contact) return false;
+      // If showMuted is false, only include ACCEPTED friends (exclude MUTED)
+      if (!showMuted && contact.friendStatus === 'MUTED') return false;
+      // If showMuted is true, include all friends (MUTED and ACCEPTED)
+      return true;
+    });
+
+    // Compare filtered statuses to detect actual changes
+    const currentStatusIds = new Set(visibleStatuses.map((s: any) => s.id));
+    const displayedStatusIds = new Set(visibleDisplayedStatuses.map((s: any) => s.id));
+
+    // Check for new or removed statuses (using filtered lists)
+    const hasNewStatuses = visibleStatuses.some((s: any) => !displayedStatusIds.has(s.id));
+    const hasRemovedStatuses = visibleDisplayedStatuses.some(
       (s: any) => !currentStatusIds.has(s.id)
     );
 
-    // Check for updated statuses (same ID but different content)
-    const hasUpdatedStatuses = statuses.some((current: any) => {
-      const displayed = displayedStatuses.find((d: any) => d.id === current.id);
+    // Check for updated statuses (same ID but different content) - using filtered lists
+    const hasUpdatedStatuses = visibleStatuses.some((current: any) => {
+      const displayed = visibleDisplayedStatuses.find((d: any) => d.id === current.id);
       if (!displayed) return false;
       return (
         displayed.message !== current.message ||
@@ -737,11 +768,10 @@ function ActivityScreenContent() {
         }),
       ]).start();
     } else {
-      // No actual changes detected, hide banner
       setHasNewUpdates(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statuses, displayedStatuses]); // Removed showMuted and contacts from dependencies
+  }, [statuses, displayedStatuses, showMuted, contacts]);
 
   // Helper function to check if status is expired or expiring soon (< 1 minute)
   const isStatusExpiredOrExpiringSoon = (status: ContactStatus | null): boolean => {
@@ -801,13 +831,10 @@ function ActivityScreenContent() {
   // Memoize to prevent recomputation when statuses (polling) updates
   // Filter based on showMuted here instead of updating displayedStatuses
   const contactsWithStatus = useMemo(() => {
-    // Filter displayedStatuses based on showMuted
-    const filteredDisplayedStatuses = showMuted
-      ? displayedStatuses
-      : displayedStatuses.filter((s: any) => {
-          const contact = contacts?.find((c: any) => c.id === s.user?.id || c.id === s.userId);
-          return contact?.friendStatus !== 'MUTED';
-        });
+    // Always use ALL displayedStatuses - don't filter here based on showMuted
+    // Filtering based on showMuted happens later in activeContacts
+    // This ensures muted contacts always get their statuses assigned
+    const allDisplayedStatuses = displayedStatuses;
     
     // Check if we have previous state to compare against (not on initial load)
     // On initial load: previousDisplayedStatusesRef is empty → no pills shown (user hasn't seen anything yet)
@@ -827,10 +854,10 @@ function ActivityScreenContent() {
         }))
       : new Map();
 
-    return contacts?.map((contact: any) => {
+    const result = contacts?.map((contact: any) => {
       const contactId = String(contact.id);
-      // Use filtered displayedStatuses to respect showMuted toggle
-      const status = filteredDisplayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id);
+      // Always use all displayedStatuses to find status (don't filter here)
+      const status = allDisplayedStatuses?.find((s: any) => s.user?.id === contact.id || s.userId === contact.id);
       
       // Determine if new or updated (only if we have previous state to compare against)
       // This logic ensures pills only show for items that changed since the last refresh
@@ -883,7 +910,8 @@ function ActivityScreenContent() {
       
       return result;
     }) || [];
-  }, [contacts, displayedStatuses, showMuted]);
+    return result;
+  }, [contacts, displayedStatuses]); // Removed showMuted - filtering happens in activeContacts
 
   // Filter to only show contacts with active statuses and sort: NEW first, then UPDATED, then unchanged
   // Backend already filters statuses by time window (startTime <= now <= endTime)
@@ -891,14 +919,19 @@ function ActivityScreenContent() {
   const activeContacts = useMemo(() => {
     const filtered = contactsWithStatus.filter((contact: any) => {
       // Must have a status
-      if (!contact.status) return false;
+      if (!contact.status) {
+        return false;
+      }
       
       // Check if contact is muted (either from friendStatus or local state)
+      // Note: Backend returns friendStatus as 'MUTED', 'ACCEPTED', 'PENDING', or 'BLOCKED'
       const isMuted = contact.friendStatus === 'MUTED' || locallyMutedContacts.has(contact.id);
       
       // When showMuted is false, we're in "Hide muted" mode - filter out muted users
       // When showMuted is true, we're in "Show everyone" mode - show all users including muted
-      if (isMuted && !showMuted) return false;
+      if (isMuted && !showMuted) {
+        return false;
+      }
       
       return true;
     });
