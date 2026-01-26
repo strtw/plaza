@@ -15,7 +15,7 @@ export DATABASE_URL="postgresql://plaza_user:plaza_dev_password@localhost:5432/p
 
 # Check if database is running
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-if ! docker-compose -f "$PROJECT_ROOT/docker-compose.yml" ps postgres | grep -q "Up"; then
+if ! docker compose -f "$PROJECT_ROOT/docker-compose.yml" ps postgres | grep -q "Up"; then
   echo "❌ Database is not running. Start it with: ./scripts/docker-db.sh start"
   exit 1
 fi

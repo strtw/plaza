@@ -13,10 +13,10 @@ cd "$PROJECT_ROOT"
 case "${1:-start}" in
   start)
     echo "🚀 Starting PostgreSQL container..."
-    docker-compose up -d postgres
+    docker compose up -d postgres
     echo "⏳ Waiting for database to be ready..."
     sleep 3
-    until docker-compose exec -T postgres pg_isready -U plaza_user -d plaza_dev > /dev/null 2>&1; do
+    until docker compose exec -T postgres pg_isready -U plaza_user -d plaza_dev > /dev/null 2>&1; do
       echo "   Waiting for database..."
       sleep 1
     done
@@ -28,7 +28,7 @@ case "${1:-start}" in
     
   stop)
     echo "🛑 Stopping PostgreSQL container..."
-    docker-compose stop postgres
+    docker compose stop postgres
     echo "✅ PostgreSQL stopped"
     ;;
     
@@ -40,11 +40,11 @@ case "${1:-start}" in
       exit 1
     fi
     echo "🗑️  Resetting database..."
-    docker-compose down -v postgres
-    docker-compose up -d postgres
+    docker compose down -v postgres
+    docker compose up -d postgres
     echo "⏳ Waiting for database to be ready..."
     sleep 3
-    until docker-compose exec -T postgres pg_isready -U plaza_user -d plaza_dev > /dev/null 2>&1; do
+    until docker compose exec -T postgres pg_isready -U plaza_user -d plaza_dev > /dev/null 2>&1; do
       echo "   Waiting for database..."
       sleep 1
     done
@@ -54,18 +54,18 @@ case "${1:-start}" in
     
   status)
     echo "📊 Database Status:"
-    docker-compose ps postgres
+    docker compose ps postgres
     echo ""
-    if docker-compose ps postgres | grep -q "Up"; then
+    if docker compose ps postgres | grep -q "Up"; then
       echo "✅ Database is running"
-      docker-compose exec -T postgres pg_isready -U plaza_user -d plaza_dev && echo "✅ Database is ready"
+      docker compose exec -T postgres pg_isready -U plaza_user -d plaza_dev && echo "✅ Database is ready"
     else
       echo "❌ Database is not running"
     fi
     ;;
     
   logs)
-    docker-compose logs -f postgres
+    docker compose logs -f postgres
     ;;
     
   *)
