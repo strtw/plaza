@@ -320,6 +320,14 @@ function ActivityScreenContent() {
   const [showMuted, setShowMuted] = useState(false);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [tempShowMuted, setTempShowMuted] = useState(false);
+  
+  // Location filter: Set of selected locations (empty = all locations)
+  const [selectedLocations, setSelectedLocations] = useState<Set<StatusLocation>>(new Set());
+  const [tempSelectedLocations, setTempSelectedLocations] = useState<Set<StatusLocation>>(new Set());
+  
+  // Duration filter: minimum minutes remaining (0 = no filter)
+  const [minDurationMinutes, setMinDurationMinutes] = useState<number>(0);
+  const [tempMinDurationMinutes, setTempMinDurationMinutes] = useState<number>(0);
 
   // Always fetch all statuses (accepted + muted) - filtering is frontend-only
   const { data: statuses, refetch: refetchStatuses } = useQuery({
@@ -1132,6 +1140,25 @@ function ActivityScreenContent() {
         return false;
       }
       
+      // Location filter: if locations are selected, only show statuses with those locations
+      if (selectedLocations.size > 0) {
+        if (!selectedLocations.has(contact.status.location)) {
+          return false;
+        }
+      }
+      
+      // Duration filter: only show statuses with at least minDurationMinutes remaining
+      if (minDurationMinutes > 0 && contact.status.endTime) {
+        const now = new Date();
+        const end = new Date(contact.status.endTime);
+        const diffMs = end.getTime() - now.getTime();
+        const diffMinutes = Math.floor(diffMs / 60000);
+        
+        if (diffMinutes < minDurationMinutes) {
+          return false;
+        }
+      }
+      
       return true;
     });
     
@@ -1150,7 +1177,7 @@ function ActivityScreenContent() {
       const nameB = getFullName(b).toLowerCase();
       return nameA.localeCompare(nameB);
     });
-  }, [contactsWithStatus, locallyMutedContacts, showMuted]);
+  }, [contactsWithStatus, locallyMutedContacts, showMuted, selectedLocations, minDurationMinutes]);
 
   const handleSaveStatus = () => {
     if (!message.trim() || !location || !endTime) {
@@ -1257,6 +1284,8 @@ function ActivityScreenContent() {
         <Pressable
           onPress={() => {
             setTempShowMuted(showMuted);
+            setTempSelectedLocations(new Set(selectedLocations));
+            setTempMinDurationMinutes(minDurationMinutes);
             setShowFiltersModal(true);
           }}
           style={styles.filterButton}
@@ -1771,8 +1800,132 @@ function ActivityScreenContent() {
             <View style={styles.checkmarkButton} />
           </View>
           <ScrollView style={styles.modalContent}>
+            {/* Location Filter */}
             <View style={styles.filterSection}>
-              <View style={styles.filterRow}>
+              <Text style={styles.filterSectionTitle}>Location</Text>
+              <View style={styles.checkboxContainer}>
+                <Pressable
+                  style={styles.checkboxRow}
+                  onPress={() => {
+                    const newSet = new Set(tempSelectedLocations);
+                    if (newSet.has(StatusLocation.HOME)) {
+                      newSet.delete(StatusLocation.HOME);
+                    } else {
+                      newSet.add(StatusLocation.HOME);
+                    }
+                    setTempSelectedLocations(newSet);
+                  }}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    tempSelectedLocations.has(StatusLocation.HOME) && styles.checkboxChecked
+                  ]}>
+                    {tempSelectedLocations.has(StatusLocation.HOME) && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxLabel}>Home</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.checkboxRow}
+                  onPress={() => {
+                    const newSet = new Set(tempSelectedLocations);
+                    if (newSet.has(StatusLocation.GREENSPACE)) {
+                      newSet.delete(StatusLocation.GREENSPACE);
+                    } else {
+                      newSet.add(StatusLocation.GREENSPACE);
+                    }
+                    setTempSelectedLocations(newSet);
+                  }}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    tempSelectedLocations.has(StatusLocation.GREENSPACE) && styles.checkboxChecked
+                  ]}>
+                    {tempSelectedLocations.has(StatusLocation.GREENSPACE) && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxLabel}>Greenspace</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.checkboxRow}
+                  onPress={() => {
+                    const newSet = new Set(tempSelectedLocations);
+                    if (newSet.has(StatusLocation.THIRD_PLACE)) {
+                      newSet.delete(StatusLocation.THIRD_PLACE);
+                    } else {
+                      newSet.add(StatusLocation.THIRD_PLACE);
+                    }
+                    setTempSelectedLocations(newSet);
+                  }}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    tempSelectedLocations.has(StatusLocation.THIRD_PLACE) && styles.checkboxChecked
+                  ]}>
+                    {tempSelectedLocations.has(StatusLocation.THIRD_PLACE) && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.checkboxLabel}>Third Place</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Divider */}
+            <View style={styles.filterDivider} />
+
+            {/* Duration Filter */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterSectionTitle}>Duration remaining</Text>
+              <View style={styles.sliderContainer}>
+                <Text style={styles.sliderLabel}>
+                  {tempMinDurationMinutes === 0 
+                    ? 'Any duration' 
+                    : `More than ${tempMinDurationMinutes} minutes remaining`}
+                </Text>
+                <View style={styles.sliderTrack}>
+                  {[0, 15, 30, 45, 60, 90, 120].map((minutes) => {
+                    // Show step as active if it's <= the selected threshold
+                    // This creates a visual "up to this point" indicator
+                    const isActive = tempMinDurationMinutes === 0 ? minutes === 0 : minutes <= tempMinDurationMinutes && minutes > 0;
+                    return (
+                      <Pressable
+                        key={minutes}
+                        style={styles.sliderStepContainer}
+                        hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
+                        onPress={() => {
+                          // Set to the clicked value (direct selection)
+                          setTempMinDurationMinutes(minutes);
+                        }}
+                      >
+                        <View style={[
+                          styles.sliderStep,
+                          isActive && styles.sliderStepActive
+                        ]} />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={styles.sliderLabels}>
+                  <Text style={styles.sliderLabelText}>Any</Text>
+                  <Text style={styles.sliderLabelText}>15m</Text>
+                  <Text style={styles.sliderLabelText}>30m</Text>
+                  <Text style={styles.sliderLabelText}>45m</Text>
+                  <Text style={styles.sliderLabelText}>1h</Text>
+                  <Text style={styles.sliderLabelText}>1.5h</Text>
+                  <Text style={styles.sliderLabelText}>2h+</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Divider */}
+            <View style={styles.filterDivider} />
+
+            {/* Muted Friends Toggle */}
+            <View style={styles.filterSection}>
+              <View style={[styles.filterRow, styles.filterRowNoBorder]}>
                 <Text style={styles.filterLabel}>Show updates from muted friends</Text>
                 <Switch
                   value={tempShowMuted}
@@ -1786,7 +1939,20 @@ function ActivityScreenContent() {
           <View style={styles.modalFooter}>
             <Pressable
               onPress={() => {
+                // Clear all filters
+                setTempShowMuted(false);
+                setTempSelectedLocations(new Set());
+                setTempMinDurationMinutes(0);
+              }}
+              style={styles.clearFiltersButton}
+            >
+              <Text style={styles.clearFiltersButtonText}>Clear Filters</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
                 setShowMuted(tempShowMuted);
+                setSelectedLocations(new Set(tempSelectedLocations));
+                setMinDurationMinutes(tempMinDurationMinutes);
                 setShowFiltersModal(false);
               }}
               style={styles.applyButton}
@@ -2098,6 +2264,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
+  filterRowNoBorder: {
+    borderBottomWidth: 0,
+  },
+  filterDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 20,
+  },
   filterLabel: {
     fontSize: 16,
     color: '#000',
@@ -2108,8 +2282,26 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
     backgroundColor: '#fff',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  clearFiltersButton: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+  },
+  clearFiltersButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
   },
   applyButton: {
+    flex: 1,
     backgroundColor: '#007AFF',
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -2120,5 +2312,81 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  filterSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 12,
+  },
+  checkboxContainer: {
+    gap: 12,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#E5E5E5',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxChecked: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  checkboxLabel: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '400',
+  },
+  sliderContainer: {
+    marginTop: 8,
+  },
+  sliderLabel: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '500',
+    marginBottom: 16,
+  },
+  sliderTrack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    marginBottom: 8,
+  },
+  sliderStepContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginHorizontal: 2,
+  },
+  sliderStep: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#E5E5E5',
+    borderRadius: 4,
+  },
+  sliderStepActive: {
+    backgroundColor: '#007AFF',
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 0,
+  },
+  sliderLabelText: {
+    fontSize: 12,
+    color: '#666',
+    flex: 1,
+    textAlign: 'center',
   },
 });

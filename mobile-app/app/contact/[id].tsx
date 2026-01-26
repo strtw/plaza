@@ -134,7 +134,7 @@ export default function ContactDetailScreen() {
         {contact.friendStatus === 'MUTED' && (
           <View style={styles.mutedIndicator}>
             <Ionicons name="volume-mute" size={16} color="#999" />
-            <Text style={styles.mutedText}>User updates are muted</Text>
+            <Text style={styles.mutedText}>User's updates are muted and won't show by default in the activity feed. To see their updates, unmute them, or toggle the "show muted user updates" filter </Text>
           </View>
         )}
         {status ? (
