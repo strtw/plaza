@@ -13,3 +13,7 @@ FE Tests:
      - user can click status button from activity screen, modal opens, and they have to enter location, message and expiration time to set status and close the modal, then their status shows at the top windw. 
      - when user sets the modal it should appear with the same styling as a normal contact row (feature no implemented yet)
      - set and clear status work
+
+- Filtering
+    - If no status are available show default message, clicking links should open the set status or invite functionality
+    - If filtered status are available, clicking the filter link should open the filter functonaity. 

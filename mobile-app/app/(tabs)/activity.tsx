@@ -1250,9 +1250,13 @@ function ActivityScreenContent() {
   const isFormReady = message.trim().length > 0 && location !== null && endTime !== null;
 
 
-  // Render update banner component - always visible, text changes based on hasNewUpdates
+  // Render update banner component - hide when filters are hiding all users
   const renderUpdateBanner = () => {
-    // Always show banner to prevent layout shifts
+    // Hide banner when all users are filtered out
+    if (hasFilteredStatuses) {
+      return null;
+    }
+    
     return (
       <Animated.View 
         style={[
@@ -1363,9 +1367,10 @@ function ActivityScreenContent() {
             <TextInput
               style={[
                 styles.statusInput,
-                (statusState === 'expired' || statusState === 'cleared') && styles.statusInputDisabled
+                (statusState === 'expired' || statusState === 'cleared') && styles.statusInputDisabled,
+                { fontSize: 14 }
               ]}
-              placeholder="Whatcha up to?"
+              placeholder="Set my status (your friends come to you!)"
               placeholderTextColor="#333"
               editable={false}
               pointerEvents="none"
@@ -1606,39 +1611,69 @@ function ActivityScreenContent() {
           />
         }
         ListEmptyComponent={
-          <View style={{ padding: 20, alignItems: 'center' }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, minHeight: 400 }}>
             {hasFilteredStatuses ? (
               <>
-                <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>
-                  Friends outside of your filter settings are sharing updates,{' '}
-                  <Pressable
-                    onPress={() => {
-                      setTempShowMuted(showMuted);
-                      setTempSelectedLocations(new Set(selectedLocations));
-                      setTempMinDurationMinutes(minDurationMinutes);
-                      setShowFiltersModal(true);
-                    }}
-                  >
-                    <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '600' }}>
-                      adjust them to see their activity
-                    </Text>
-                  </Pressable>
+                <Text style={{ fontSize: 20, color: '#666', textAlign: 'center', lineHeight: 28 }}>
+                  Friends are sharing updates,
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    setTempShowMuted(showMuted);
+                    setTempSelectedLocations(new Set(selectedLocations));
+                    setTempMinDurationMinutes(minDurationMinutes);
+                    setShowFiltersModal(true);
+                  }}
+                >
+                  <Text style={{ fontSize: 20, color: '#007AFF', fontWeight: '600', textAlign: 'center', lineHeight: 28 }}>
+                    adjust your filters
+                  </Text>
+                </Pressable>
+                <Text style={{ fontSize: 20, color: '#666', textAlign: 'center', lineHeight: 28 }}>
+                  to see their activity!
                 </Text>
               </>
             ) : (
               <>
-                <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>
-                  No friends are sharing their current status, the more you invite the more activity you'll see! <Pressable
-                  onPress={() => {
-                    router.push('/(tabs)/contacts?openInvite=true');
-                  }}
-                >
-                  <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '600' }}>
-                    Send Invites
-                  </Text>
-                </Pressable> 
+                <Text style={{ fontSize: 20, color: '#666', textAlign: 'center', lineHeight: 28 }}>
+                  No friends are currently sharing their status
                 </Text>
-                <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>Or share your current status</Text>
+                <Text style={{ fontSize: 20, color: '#666', textAlign: 'center', lineHeight: 28, marginTop: 12 }}>
+                  Maybe it's the perfect time to{' '}
+                  <Pressable
+                    onPress={() => {
+                      // Populate form with current status if it exists, otherwise reset
+                      if (storeStatus) {
+                        setMessage(storeStatus.message);
+                        setLocation(mapBackendToFrontendLocation(storeStatus.location));
+                        setEndTime(new Date(storeStatus.endTime));
+                      } else {
+                        setMessage('');
+                        setLocation(null);
+                        setEndTime(getDefaultEndTime());
+                      }
+                      setShowStatusModal(true);
+                    }}
+                  >
+                    <Text style={{ fontSize: 20, color: '#007AFF', fontWeight: '600' }}>
+                      share yours?
+                    </Text>
+                  </Pressable>
+                </Text>
+                <Text style={{ fontSize: 20, color: '#666', textAlign: 'center', lineHeight: 28, marginTop: 12 }}>
+                  OR
+                </Text>
+                <Text style={{ fontSize: 20, color: '#666', textAlign: 'center', lineHeight: 28, marginTop: 12 }}>
+                  <Pressable
+                    onPress={() => {
+                      router.push('/(tabs)/contacts?openInvite=true');
+                    }}
+                  >
+                    <Text style={{ fontSize: 20, color: '#007AFF', fontWeight: '600' }}>
+                      Invite your friends to plaza!
+                    </Text>
+                  </Pressable>
+                </Text>
               </>
             )}
           </View>
@@ -1675,13 +1710,13 @@ function ActivityScreenContent() {
           <ScrollView style={styles.modalContent}>
             <View style={styles.messageContainer}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionLabel}>Status Message</Text>
+                <Text style={styles.sectionLabel}>Message</Text>
                 <Text style={styles.requiredIndicator}>Required</Text>
               </View>
               <TextInput
                 value={message}
                 onChangeText={setMessage}
-                placeholder="Whatcha up to?"
+                placeholder="Tell your friends where to meet you and what you're up to."
                 placeholderTextColor="#333"
                 style={[
                   styles.messageInput,
@@ -2005,7 +2040,7 @@ function ActivityScreenContent() {
               }}
               style={styles.clearFiltersButton}
             >
-              <Text style={styles.clearFiltersButtonText}>Clear Filters</Text>
+              <Text style={styles.clearFiltersButtonText}>Reset Filters</Text>
             </Pressable>
             <Pressable
               onPress={() => {
