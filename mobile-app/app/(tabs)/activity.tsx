@@ -1,4 +1,4 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, Easing, LayoutAnimation, UIManager, PanResponder } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, Easing, LayoutAnimation, UIManager, PanResponder, Switch } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
@@ -318,6 +318,8 @@ function ActivityScreenContent() {
   const hasMutedFriends = contacts?.some((c: any) => c.friendStatus === 'MUTED') || false;
 
   const [showMuted, setShowMuted] = useState(false);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
+  const [tempShowMuted, setTempShowMuted] = useState(false);
 
   // Always fetch all statuses (accepted + muted) - filtering is frontend-only
   const { data: statuses, refetch: refetchStatuses } = useQuery({
@@ -1252,21 +1254,15 @@ function ActivityScreenContent() {
     <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={[styles.headerContainer, { paddingTop: headerPaddingTop }]}>
         <Text style={styles.headerTitle}>Activity</Text>
-                      {hasMutedFriends && (
-                        <Pressable
-                          onPress={() => setShowMuted(!showMuted)}
-                          style={{
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: 16,
-                            backgroundColor: showMuted ? '#007AFF' : '#E5E5E5',
-                          }}
-                        >
-                          <Text style={{ color: showMuted ? '#fff' : '#666', fontSize: 14, fontWeight: '500' }}>
-                            {showMuted ? 'Hide muted friends' : 'Show muted friends'}
-                          </Text>
-                        </Pressable>
-                      )}
+        <Pressable
+          onPress={() => {
+            setTempShowMuted(showMuted);
+            setShowFiltersModal(true);
+          }}
+          style={styles.filterButton}
+        >
+          <Ionicons name="filter" size={24} color="#007AFF" />
+        </Pressable>
       </View>
       <Animated.View style={{ opacity: Animated.multiply(statusFadeAnim, statusGrayAnim) }}>
         <Pressable 
@@ -1758,6 +1754,48 @@ function ActivityScreenContent() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Filters Modal */}
+      <Modal
+        visible={showFiltersModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowFiltersModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalHeader, { paddingTop: insets.top + 16 }]}>
+            <Pressable onPress={() => setShowFiltersModal(false)} style={styles.closeButton}>
+              <Ionicons name="close" size={28} color="#000" />
+            </Pressable>
+            <Text style={styles.modalTitle}>Filters</Text>
+            <View style={styles.checkmarkButton} />
+          </View>
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.filterSection}>
+              <View style={styles.filterRow}>
+                <Text style={styles.filterLabel}>Show updates from muted friends</Text>
+                <Switch
+                  value={tempShowMuted}
+                  onValueChange={setTempShowMuted}
+                  trackColor={{ false: '#E5E5E5', true: '#007AFF' }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </View>
+          </ScrollView>
+          <View style={styles.modalFooter}>
+            <Pressable
+              onPress={() => {
+                setShowMuted(tempShowMuted);
+                setShowFiltersModal(false);
+              }}
+              style={styles.applyButton}
+            >
+              <Text style={styles.applyButtonText}>Apply</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2042,6 +2080,45 @@ const styles = StyleSheet.create({
   updateBannerText: {
     fontSize: 14,
     color: '#007AFF',
+    fontWeight: '600',
+  },
+  filterButton: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterSection: {
+    marginTop: 20,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  filterLabel: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '500',
+  },
+  modalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    backgroundColor: '#fff',
+  },
+  applyButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
