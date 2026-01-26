@@ -1,4 +1,36 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+// Railway URL as fallback (stable, always works)
+const RAILWAY_URL = 'https://plaza-dev.up.railway.app';
+
+// Get API URL from environment, with smart detection
+const getApiUrl = (): string => {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  
+  if (!envUrl) {
+    // No URL configured, use Railway as default
+    return RAILWAY_URL;
+  }
+
+  // If URL contains localhost or 127.0.0.1, use as-is (for simulators)
+  if (envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+
+  // If URL contains .local (mDNS hostname), use as-is (for physical devices)
+  if (envUrl.includes('.local')) {
+    return envUrl;
+  }
+
+  // If URL is a local IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x), use as-is
+  // These will be tried first, with Railway as fallback
+  if (/^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(envUrl)) {
+    return envUrl;
+  }
+
+  // Otherwise, use the configured URL (likely Railway or other cloud service)
+  return envUrl;
+};
+
+const API_URL = getApiUrl();
 
 export const createApi = (getToken: () => Promise<string | null>) => {
   // Helper to wait for token with retries
@@ -25,20 +57,19 @@ export const createApi = (getToken: () => Promise<string | null>) => {
   };
 
   const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
-    if (!API_URL) {
-      throw new Error('API_URL is not configured. Check your .env file.');
-    }
-
     const token = await waitForToken();
     
-    const url = `${API_URL}${endpoint}`;
-    console.log(`[API] Making request to: ${url}`);
-    console.log(`[API] Method: ${options.method || 'GET'}`);
-    console.log(`[API] Has token: ${!!token}`);
+    // Determine which URL to use
+    const baseUrl = API_URL;
+    const isLocalUrl = baseUrl.startsWith('http://') && 
+      (baseUrl.includes('localhost') || 
+       baseUrl.includes('127.0.0.1') || 
+       baseUrl.includes('.local') ||
+       /^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(baseUrl));
     
-    let response: Response;
-    try {
-      response = await fetch(url, {
+    // Try the configured URL first
+    const tryFetch = async (url: string): Promise<Response> => {
+      return fetch(url, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
@@ -46,9 +77,31 @@ export const createApi = (getToken: () => Promise<string | null>) => {
           ...options.headers,
         },
       });
+    };
+
+    let response: Response;
+    try {
+      const url = `${baseUrl}${endpoint}`;
+      console.log(`[API] Making request to: ${url}`);
+      console.log(`[API] Method: ${options.method || 'GET'}`);
+      
+      response = await tryFetch(url);
     } catch (fetchError: any) {
-      console.error('[API] Fetch error:', fetchError);
-      throw new Error(`Network error: ${fetchError.message || 'Failed to connect to server'}`);
+      // If using local URL and it fails, try Railway as fallback
+      if (isLocalUrl && baseUrl !== RAILWAY_URL) {
+        console.log(`[API] Local backend unavailable, falling back to Railway...`);
+        try {
+          const fallbackUrl = `${RAILWAY_URL}${endpoint}`;
+          console.log(`[API] Retrying with Railway URL: ${fallbackUrl}`);
+          response = await tryFetch(fallbackUrl);
+        } catch (fallbackError: any) {
+          console.error('[API] Both local and Railway failed:', fallbackError);
+          throw new Error(`Network error: ${fallbackError.message || 'Failed to connect to server'}`);
+        }
+      } else {
+        console.error('[API] Fetch error:', fetchError);
+        throw new Error(`Network error: ${fetchError.message || 'Failed to connect to server'}`);
+      }
     }
 
     console.log(`[API] Response status: ${response.status} ${response.statusText}`);
