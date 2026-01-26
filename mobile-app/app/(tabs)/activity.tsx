@@ -322,8 +322,13 @@ function ActivityScreenContent() {
   const [tempShowMuted, setTempShowMuted] = useState(false);
   
   // Location filter: Set of selected locations (empty = all locations)
-  const [selectedLocations, setSelectedLocations] = useState<Set<StatusLocation>>(new Set());
-  const [tempSelectedLocations, setTempSelectedLocations] = useState<Set<StatusLocation>>(new Set());
+  // Default to all locations selected
+  const [selectedLocations, setSelectedLocations] = useState<Set<StatusLocation>>(
+    new Set([StatusLocation.HOME, StatusLocation.GREENSPACE, StatusLocation.THIRD_PLACE])
+  );
+  const [tempSelectedLocations, setTempSelectedLocations] = useState<Set<StatusLocation>>(
+    new Set([StatusLocation.HOME, StatusLocation.GREENSPACE, StatusLocation.THIRD_PLACE])
+  );
   
   // Duration filter: minimum minutes remaining (0 = no filter)
   const [minDurationMinutes, setMinDurationMinutes] = useState<number>(0);
@@ -1141,7 +1146,10 @@ function ActivityScreenContent() {
       }
       
       // Location filter: if locations are selected, only show statuses with those locations
-      if (selectedLocations.size > 0) {
+      // If all locations are selected (size === 3), show all (no filter)
+      // If some locations are selected (0 < size < 3), filter by those
+      // If no locations are selected (size === 0), show all (no filter)
+      if (selectedLocations.size > 0 && selectedLocations.size < 3) {
         if (!selectedLocations.has(contact.status.location)) {
           return false;
         }
@@ -1178,6 +1186,14 @@ function ActivityScreenContent() {
       return nameA.localeCompare(nameB);
     });
   }, [contactsWithStatus, locallyMutedContacts, showMuted, selectedLocations, minDurationMinutes]);
+
+  // Check if there are statuses that exist but are being filtered out
+  const hasFilteredStatuses = useMemo(() => {
+    // Check if there are any contacts with statuses
+    const hasAnyStatuses = contactsWithStatus.some((contact: any) => contact.status);
+    // If there are statuses but no active contacts, they're being filtered out
+    return hasAnyStatuses && activeContacts.length === 0;
+  }, [contactsWithStatus, activeContacts]);
 
   const handleSaveStatus = () => {
     if (!message.trim() || !location || !endTime) {
@@ -1591,18 +1607,40 @@ function ActivityScreenContent() {
         }
         ListEmptyComponent={
           <View style={{ padding: 20, alignItems: 'center' }}>
-            <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>
-              No friends are sharing their current status, the more you invite the more activity you'll see! <Pressable
-              onPress={() => {
-                router.push('/(tabs)/contacts?openInvite=true');
-              }}
-            >
-              <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '600' }}>
-                Send Invites
-              </Text>
-            </Pressable> 
-            </Text>
-          <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>Or share your current status</Text>
+            {hasFilteredStatuses ? (
+              <>
+                <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>
+                  Friends outside of your filter settings are sharing updates,{' '}
+                  <Pressable
+                    onPress={() => {
+                      setTempShowMuted(showMuted);
+                      setTempSelectedLocations(new Set(selectedLocations));
+                      setTempMinDurationMinutes(minDurationMinutes);
+                      setShowFiltersModal(true);
+                    }}
+                  >
+                    <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '600' }}>
+                      adjust them to see their activity
+                    </Text>
+                  </Pressable>
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>
+                  No friends are sharing their current status, the more you invite the more activity you'll see! <Pressable
+                  onPress={() => {
+                    router.push('/(tabs)/contacts?openInvite=true');
+                  }}
+                >
+                  <Text style={{ fontSize: 16, color: '#007AFF', fontWeight: '600' }}>
+                    Send Invites
+                  </Text>
+                </Pressable> 
+                </Text>
+                <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 12 }}>Or share your current status</Text>
+              </>
+            )}
           </View>
         }
       />
@@ -1809,7 +1847,10 @@ function ActivityScreenContent() {
                   onPress={() => {
                     const newSet = new Set(tempSelectedLocations);
                     if (newSet.has(StatusLocation.HOME)) {
-                      newSet.delete(StatusLocation.HOME);
+                      // Only allow unselecting if at least one other location is selected
+                      if (newSet.size > 1) {
+                        newSet.delete(StatusLocation.HOME);
+                      }
                     } else {
                       newSet.add(StatusLocation.HOME);
                     }
@@ -1818,20 +1859,27 @@ function ActivityScreenContent() {
                 >
                   <View style={[
                     styles.checkbox,
-                    tempSelectedLocations.has(StatusLocation.HOME) && styles.checkboxChecked
+                    tempSelectedLocations.has(StatusLocation.HOME) && styles.checkboxChecked,
+                    tempSelectedLocations.has(StatusLocation.HOME) && tempSelectedLocations.size === 1 && styles.checkboxDisabled
                   ]}>
                     {tempSelectedLocations.has(StatusLocation.HOME) && (
                       <Ionicons name="checkmark" size={16} color="#fff" />
                     )}
                   </View>
-                  <Text style={styles.checkboxLabel}>Home</Text>
+                  <Text style={[
+                    styles.checkboxLabel,
+                    tempSelectedLocations.has(StatusLocation.HOME) && tempSelectedLocations.size === 1 && styles.checkboxLabelDisabled
+                  ]}>Home</Text>
                 </Pressable>
                 <Pressable
                   style={styles.checkboxRow}
                   onPress={() => {
                     const newSet = new Set(tempSelectedLocations);
                     if (newSet.has(StatusLocation.GREENSPACE)) {
-                      newSet.delete(StatusLocation.GREENSPACE);
+                      // Only allow unselecting if at least one other location is selected
+                      if (newSet.size > 1) {
+                        newSet.delete(StatusLocation.GREENSPACE);
+                      }
                     } else {
                       newSet.add(StatusLocation.GREENSPACE);
                     }
@@ -1840,20 +1888,27 @@ function ActivityScreenContent() {
                 >
                   <View style={[
                     styles.checkbox,
-                    tempSelectedLocations.has(StatusLocation.GREENSPACE) && styles.checkboxChecked
+                    tempSelectedLocations.has(StatusLocation.GREENSPACE) && styles.checkboxChecked,
+                    tempSelectedLocations.has(StatusLocation.GREENSPACE) && tempSelectedLocations.size === 1 && styles.checkboxDisabled
                   ]}>
                     {tempSelectedLocations.has(StatusLocation.GREENSPACE) && (
                       <Ionicons name="checkmark" size={16} color="#fff" />
                     )}
                   </View>
-                  <Text style={styles.checkboxLabel}>Greenspace</Text>
+                  <Text style={[
+                    styles.checkboxLabel,
+                    tempSelectedLocations.has(StatusLocation.GREENSPACE) && tempSelectedLocations.size === 1 && styles.checkboxLabelDisabled
+                  ]}>Greenspace</Text>
                 </Pressable>
                 <Pressable
                   style={styles.checkboxRow}
                   onPress={() => {
                     const newSet = new Set(tempSelectedLocations);
                     if (newSet.has(StatusLocation.THIRD_PLACE)) {
-                      newSet.delete(StatusLocation.THIRD_PLACE);
+                      // Only allow unselecting if at least one other location is selected
+                      if (newSet.size > 1) {
+                        newSet.delete(StatusLocation.THIRD_PLACE);
+                      }
                     } else {
                       newSet.add(StatusLocation.THIRD_PLACE);
                     }
@@ -1862,13 +1917,17 @@ function ActivityScreenContent() {
                 >
                   <View style={[
                     styles.checkbox,
-                    tempSelectedLocations.has(StatusLocation.THIRD_PLACE) && styles.checkboxChecked
+                    tempSelectedLocations.has(StatusLocation.THIRD_PLACE) && styles.checkboxChecked,
+                    tempSelectedLocations.has(StatusLocation.THIRD_PLACE) && tempSelectedLocations.size === 1 && styles.checkboxDisabled
                   ]}>
                     {tempSelectedLocations.has(StatusLocation.THIRD_PLACE) && (
                       <Ionicons name="checkmark" size={16} color="#fff" />
                     )}
                   </View>
-                  <Text style={styles.checkboxLabel}>Third Place</Text>
+                  <Text style={[
+                    styles.checkboxLabel,
+                    tempSelectedLocations.has(StatusLocation.THIRD_PLACE) && tempSelectedLocations.size === 1 && styles.checkboxLabelDisabled
+                  ]}>Third Place</Text>
                 </Pressable>
               </View>
             </View>
@@ -1939,9 +1998,9 @@ function ActivityScreenContent() {
           <View style={styles.modalFooter}>
             <Pressable
               onPress={() => {
-                // Clear all filters
+                // Clear all filters (reset to defaults: all locations, any duration, no muted)
                 setTempShowMuted(false);
-                setTempSelectedLocations(new Set());
+                setTempSelectedLocations(new Set([StatusLocation.HOME, StatusLocation.GREENSPACE, StatusLocation.THIRD_PLACE]));
                 setTempMinDurationMinutes(0);
               }}
               style={styles.clearFiltersButton}
@@ -2346,6 +2405,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
     fontWeight: '400',
+  },
+  checkboxDisabled: {
+    opacity: 0.5,
+  },
+  checkboxLabelDisabled: {
+    color: '#999',
   },
   sliderContainer: {
     marginTop: 8,
