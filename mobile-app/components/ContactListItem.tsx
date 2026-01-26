@@ -241,13 +241,18 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false, pre
                 style={styles.muteIcon}
               />
             )}
-            {/* Time remaining bubble or expired pill - positioned left of location icon */}
-            {contact.status && statusState !== 'cleared' && (
+            {/* Time remaining bubble, expired pill, or cleared pill - positioned left of location icon */}
+            {contact.status && (
               <>
                 {statusState === 'expired' ? (
                   // Show red "expired" pill when expired
                   <View style={[styles.timeBubble, styles.expiredBubble]}>
                     <Text style={styles.timeBubbleText}>expired</Text>
+                  </View>
+                ) : statusState === 'cleared' ? (
+                  // Show gray "cleared" pill when cleared
+                  <View style={[styles.timeBubble, styles.clearedBubble]}>
+                    <Text style={styles.timeBubbleText}>cleared</Text>
                   </View>
                 ) : !isStatusExpiredOrExpiringSoon() ? (
                   // Normal time bubble when active
@@ -388,6 +393,9 @@ const styles = StyleSheet.create({
   },
   expiredBubble: {
     backgroundColor: '#F44336', // Red for expired
+  },
+  clearedBubble: {
+    backgroundColor: '#999', // Gray for cleared
   },
   timeBubbleStrikethrough: {
     textDecorationLine: 'line-through',

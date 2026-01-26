@@ -732,7 +732,7 @@ function ActivityScreenContent() {
     }
   }, [displayedStatuses]);
 
-  // Update current time every minute
+  // Update current time every minute (for time remaining display)
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
@@ -741,51 +741,102 @@ function ActivityScreenContent() {
     return () => clearInterval(interval);
   }, []);
 
-  // Detect when friend statuses expire or are cleared (via polling)
-  // Automatically gray them out without requiring refresh
+  // Simple expiration detection: check every 30 seconds for expired statuses
+  // Statuses can show as normal for up to 1 minute after expiration, then update to "expired"
+  // This is much simpler and scales efficiently to 100+ statuses
+  useEffect(() => {
+    if (!displayedStatuses.length) return;
+
+    const checkExpiration = () => {
+      const now = new Date();
+      const updatedExpiredOrCleared = new Map(expiredOrClearedStatuses);
+      let hasChanges = false;
+
+      displayedStatuses.forEach((displayedStatus: any) => {
+        if (!displayedStatus.id || !displayedStatus.endTime) return;
+        
+        // Skip if already expired/cleared
+        if (expiredOrClearedStatuses.has(displayedStatus.id)) {
+          return;
+        }
+
+        const end = new Date(displayedStatus.endTime);
+        // Check if status has expired (endTime has passed)
+        if (end.getTime() <= now.getTime()) {
+          // Status expired - mark it as expired
+          updatedExpiredOrCleared.set(displayedStatus.id, 'expired');
+          hasChanges = true;
+        }
+      });
+
+      if (hasChanges) {
+        // Update state and trigger animations for newly expired statuses
+        const newlyExpired = new Set<string>();
+        updatedExpiredOrCleared.forEach((state, id) => {
+          if (!expiredOrClearedStatuses.has(id) && state === 'expired') {
+            newlyExpired.add(id);
+          }
+        });
+
+        newlyExpired.forEach((statusId) => {
+          let grayAnim = friendStatusGrayAnims.get(statusId);
+          if (!grayAnim) {
+            grayAnim = new Animated.Value(1);
+            friendStatusGrayAnims.set(statusId, grayAnim);
+          }
+          Animated.timing(grayAnim, {
+            toValue: 0.6,
+            duration: 300,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }).start();
+        });
+
+        setExpiredOrClearedStatuses(updatedExpiredOrCleared);
+      }
+    };
+
+    // Check immediately, then every 30 seconds
+    // This ensures expired statuses are detected within 1 minute of expiration
+    checkExpiration();
+    const interval = setInterval(checkExpiration, 30000); // 30 seconds
+    return () => clearInterval(interval);
+  }, [displayedStatuses, expiredOrClearedStatuses]);
+
+  // Detect when friend statuses are cleared (via polling)
+  // Expiration is handled by per-status timers above
   useEffect(() => {
     if (!statuses || !displayedStatuses.length) return;
 
-    const now = new Date();
     const updatedExpiredOrCleared = new Map(expiredOrClearedStatuses);
 
-    // Check each displayed status
+    // Check each displayed status for clearance
     displayedStatuses.forEach((displayedStatus: any) => {
       if (!displayedStatus.id) return;
 
-      // Check if status expired (endTime passed)
-      if (displayedStatus.endTime) {
-        const end = new Date(displayedStatus.endTime);
-        if (end.getTime() <= now.getTime()) {
-          // Status expired - mark as expired if not already marked
-          if (!updatedExpiredOrCleared.has(displayedStatus.id)) {
-            updatedExpiredOrCleared.set(displayedStatus.id, 'expired');
-          }
-        }
-      }
-
       // Check if status was cleared (no longer exists in fresh statuses)
-      const stillExists = statuses.some((s: any) => s.id === displayedStatus.id);
-      if (!stillExists && displayedStatus.endTime) {
-        // Status was cleared - mark as cleared if not already marked
-        // Only mark as cleared if it wasn't already expired (expired takes precedence)
-        if (!updatedExpiredOrCleared.has(displayedStatus.id)) {
-          updatedExpiredOrCleared.set(displayedStatus.id, 'cleared');
+      // Only check if not already expired (expired takes precedence)
+      if (!updatedExpiredOrCleared.has(displayedStatus.id) || updatedExpiredOrCleared.get(displayedStatus.id) !== 'expired') {
+        const stillExists = statuses.some((s: any) => s.id === displayedStatus.id);
+        if (!stillExists && displayedStatus.endTime) {
+          // Status was cleared - mark as cleared if not already marked
+          if (!updatedExpiredOrCleared.has(displayedStatus.id)) {
+            updatedExpiredOrCleared.set(displayedStatus.id, 'cleared');
+          }
         }
       }
     });
 
     // Update state if anything changed and trigger fade-to-gray animations
-    const newlyExpiredOrCleared = new Set<string>();
+    const newlyCleared = new Set<string>();
     updatedExpiredOrCleared.forEach((state, id) => {
-      if (!expiredOrClearedStatuses.has(id)) {
-        newlyExpiredOrCleared.add(id);
+      if (!expiredOrClearedStatuses.has(id) && state === 'cleared') {
+        newlyCleared.add(id);
       }
     });
 
-    // Trigger fade-to-gray animation for newly expired/cleared statuses
-    newlyExpiredOrCleared.forEach((statusId) => {
-      const state = updatedExpiredOrCleared.get(statusId);
+    // Trigger fade-to-gray animation for newly cleared statuses
+    newlyCleared.forEach((statusId) => {
       let grayAnim = friendStatusGrayAnims.get(statusId);
       if (!grayAnim) {
         grayAnim = new Animated.Value(1);
@@ -798,20 +849,18 @@ function ActivityScreenContent() {
         easing: Easing.out(Easing.ease),
         useNativeDriver: true,
       }).start(() => {
-        // After gray animation completes, if status is cleared, fade text transition
-        if (state === 'cleared') {
-          let textFadeAnim = friendStatusTextFadeAnims.get(statusId);
-          if (!textFadeAnim) {
-            textFadeAnim = new Animated.Value(1); // Start at 1 (original text visible)
-            friendStatusTextFadeAnims.set(statusId, textFadeAnim);
-          }
-          // Fade out original text (1 → 0) over 200ms, then cleared message will fade in
-          Animated.timing(textFadeAnim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
+        // After gray animation completes, fade text transition
+        let textFadeAnim = friendStatusTextFadeAnims.get(statusId);
+        if (!textFadeAnim) {
+          textFadeAnim = new Animated.Value(1); // Start at 1 (original text visible)
+          friendStatusTextFadeAnims.set(statusId, textFadeAnim);
         }
+        // Fade out original text (1 → 0) over 200ms, then cleared message will fade in
+        Animated.timing(textFadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
       });
     });
 
@@ -822,7 +871,7 @@ function ActivityScreenContent() {
         )) {
       setExpiredOrClearedStatuses(updatedExpiredOrCleared);
     }
-  }, [statuses, displayedStatuses, currentTime, expiredOrClearedStatuses]);
+  }, [statuses, displayedStatuses, expiredOrClearedStatuses]);
 
   // Detect status changes to show "New updates" indicator
   // Requirements:
