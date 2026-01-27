@@ -134,8 +134,8 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
       setDeviceContacts([]);
       setIsLoadingContacts(false);
       setNeedsFullAccess(false);
-      setSelectedContacts(new Set());
       setSearchQuery('');
+      // Keep selectedContacts so selection persists when modal is reopened
     }
   }, [visible]);
 
@@ -147,8 +147,8 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
       await matchContactsMutation.mutateAsync(phoneHashes);
       await queryClient.invalidateQueries({ queryKey: ['friends'] });
       const count = selected.length;
-      setSelectedContacts(new Set());
       onClose(count);
+      // Keep selectedContacts so selection persists when modal is reopened
     } catch {
       // Error already shown by mutation
     }
