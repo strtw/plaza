@@ -38,6 +38,8 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [contactsInPlaza, setContactsInPlaza] = useState<Set<string>>(new Set());
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+  const [groupsLocked, setGroupsLocked] = useState(true);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const noteWiggle = useRef(new Animated.Value(0)).current;
   const tenSecondTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStartedWiggleTimer = useRef(false);
@@ -364,13 +366,25 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
           {!isLoadingContacts && deviceContacts.length > 0 && (
             <View style={styles.groupsSection}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionHeaderText}>my groups</Text>
+                <View style={styles.groupsSectionHeaderRow}>
+                  <Text style={styles.sectionHeaderText}>my groups</Text>
+                  <Pressable
+                    onPress={() => setGroupsLocked((prev) => !prev)}
+                    style={styles.groupsLockButton}
+                    hitSlop={10}
+                  >
+                    <Ionicons name={groupsLocked ? 'lock-closed' : 'lock-open'} size={20} color="#007AFF" />
+                  </Pressable>
+                </View>
               </View>
               <View style={styles.groupsRow}>
                 {demoGroups.map((group) => {
                   const isSelected = selectedGroups.has(group.id);
                   return (
-                    <Pressable key={group.id} onPress={() => toggleGroup(group.id)}>
+                    <Pressable
+                      key={group.id}
+                      onPress={() => (groupsLocked ? toggleGroup(group.id) : setEditingGroupId(group.id))}
+                    >
                       <View style={styles.groupAvatarWrapper}>
                         <View style={styles.groupAvatarWithBadge}>
                           <View style={[styles.groupAvatar, { backgroundColor: group.backgroundColor }, isSelected && styles.groupAvatarSelected]}>
@@ -453,6 +467,17 @@ const styles = StyleSheet.create({
   searchContainer: { marginBottom: 16 },
   searchInput: { backgroundColor: '#f5f5f5', borderRadius: 8, padding: 12, fontSize: 16, color: '#000', borderWidth: 1, borderColor: '#e0e0e0' },
   groupsSection: { marginBottom: 16 },
+  groupsSectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  groupsLockButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#E8F4FD',
+    borderWidth: 1,
+    borderColor: '#B8DAFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   groupsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, paddingTop: 12, paddingHorizontal: 4 },
   groupAvatarAdd: {
     width: 44,
