@@ -9,7 +9,6 @@ import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUserStore } from '../../../stores/userStore';
-import { FindFriendsModal } from '../../../components/FindFriendsModal';
 
 const roundToNearest15Minutes = (date: Date): Date => {
   const rounded = new Date(date);
@@ -44,14 +43,12 @@ export default function SetStatusScreen() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentStatus: storeStatus, setCurrentStatus } = useUserStore();
+  const { currentStatus: storeStatus, setCurrentStatus, lastAddFriendsCount } = useUserStore();
 
   const [message, setMessage] = useState('');
   const [location, setLocation] = useState<'home' | 'greenspace' | 'third-place' | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(() => getDefaultEndTime());
   const [timeTouched, setTimeTouched] = useState(false);
-  const [showFindFriendsModal, setShowFindFriendsModal] = useState(false);
-  const [friendsCount, setFriendsCount] = useState(0);
 
   const { data: currentStatus } = useQuery({
     queryKey: ['my-status'],
@@ -144,7 +141,7 @@ export default function SetStatusScreen() {
     location !== null &&
     endTime !== null &&
     timeTouched &&
-    friendsCount >= 2;
+    lastAddFriendsCount >= 2;
   const hasExistingStatus = !!storeStatus && !!currentStatus;
 
   if (!isLoaded || !isSignedIn) return null;
@@ -282,11 +279,11 @@ export default function SetStatusScreen() {
             <Text style={styles.sectionLabel}>Tell some friends</Text>
             <Text style={styles.requiredIndicator}>Required</Text>
           </View>
-          <Pressable style={styles.tellFriendsButton} onPress={() => setShowFindFriendsModal(true)}>
+          <Pressable style={styles.tellFriendsButton} onPress={() => router.push('/(tabs)/activity/add-friends')}>
             <Ionicons name="add" size={28} color="#007AFF" />
             <Ionicons name="people" size={28} color="#007AFF" />
-            {friendsCount > 0 && (
-              <Text style={styles.tellFriendsCount}>({friendsCount})</Text>
+            {lastAddFriendsCount > 0 && (
+              <Text style={styles.tellFriendsCount}>({lastAddFriendsCount})</Text>
             )}
           </Pressable>
         </View>
@@ -312,14 +309,6 @@ export default function SetStatusScreen() {
           </View>
         )}
       </ScrollView>
-
-      <FindFriendsModal
-        visible={showFindFriendsModal}
-        onClose={(count) => {
-          setShowFindFriendsModal(false);
-          if (count !== undefined) setFriendsCount(count);
-        }}
-      />
     </View>
   );
 }

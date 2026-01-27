@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFullName } from '../../lib/types';
 
 export default function ContactDetailScreen() {
-  const { id, isUpdated, previousStatus } = useLocalSearchParams();
+  const { id, isUpdated, previousStatus, from } = useLocalSearchParams<{ id?: string; isUpdated?: string; previousStatus?: string; from?: string }>();
   const api = useApi();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -114,7 +114,7 @@ export default function ContactDetailScreen() {
       <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
         <Pressable 
           style={styles.backButton}
-          onPress={() => router.push('/(tabs)')}
+          onPress={() => (from === 'add-friends' ? router.replace('/(tabs)/activity/add-friends') : router.back())}
         >
           <Ionicons name="chevron-back" size={28} color="#007AFF" />
         </Pressable>

@@ -14,6 +14,7 @@ import {
   Animated,
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useRouter } from 'expo-router';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import * as Contacts from 'expo-contacts';
 import * as Clipboard from 'expo-clipboard';
@@ -24,10 +25,13 @@ import { hashPhones } from '../lib/phone-hash.util';
 export type FindFriendsModalProps = {
   visible: boolean;
   onClose: (count?: number) => void;
+  /** When true, render as a full-screen View instead of Modal (e.g. when used as add-friends route). */
+  asFullScreen?: boolean;
 };
 
-export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
+export function FindFriendsModal({ visible, onClose, asFullScreen = false }: FindFriendsModalProps) {
   const { getToken } = useAuth();
+  const router = useRouter();
   const api = createApi(getToken!);
   const queryClient = useQueryClient();
 
@@ -37,6 +41,8 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [contactsInPlaza, setContactsInPlaza] = useState<Set<string>>(new Set());
+  const [plazaUserIdByPhone, setPlazaUserIdByPhone] = useState<Record<string, string>>({});
+  const [plazaContactsLocked, setPlazaContactsLocked] = useState(true);
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [groupsLocked, setGroupsLocked] = useState(true);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -135,15 +141,20 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
       const phoneHashes = await hashPhones(phoneNumbers, api.hashPhones);
       const checkResult = await api.checkContacts(phoneHashes);
       const plazaUserPhones = new Set<string>();
+      const userIdByPhone: Record<string, string> = {};
       const hashToPhone = new Map<string, string>();
       for (let i = 0; i < phoneNumbers.length; i++) {
         hashToPhone.set(phoneHashes[i], phoneNumbers[i]);
       }
-      checkResult.existingUsers.forEach((user: { phoneHash: string }) => {
+      checkResult.existingUsers.forEach((user: { phoneHash: string; id: string }) => {
         const phone = hashToPhone.get(user.phoneHash);
-        if (phone) plazaUserPhones.add(phone);
+        if (phone) {
+          plazaUserPhones.add(phone);
+          userIdByPhone[phone] = user.id;
+        }
       });
       setContactsInPlaza(plazaUserPhones);
+      setPlazaUserIdByPhone(userIdByPhone);
     } catch (error) {
       console.error('Error checking contacts in Plaza:', error);
     }
@@ -226,7 +237,7 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
 
   type ListItem = { type: 'header'; title: string; key: string } | { type: 'contact'; contact: { name: string; phone: string }; isPlaza: boolean };
   const listData: ListItem[] = [
-    ...(plazaUsers.length > 0 ? [{ type: 'header' as const, title: 'contacts', key: 'plaza-header' }] : []),
+    ...(plazaUsers.length > 0 ? [{ type: 'header' as const, title: asFullScreen ? 'Contacts on plaza' : 'contacts', key: 'plaza-header' }] : []),
     ...plazaUsers.map((c) => ({ type: 'contact' as const, contact: c, isPlaza: true })),
     ...(nonPlazaUsers.length > 0 ? [{ type: 'header' as const, title: 'Not on Plaza', key: 'non-plaza-header' }] : []),
     ...nonPlazaUsers.map((c) => ({ type: 'contact' as const, contact: c, isPlaza: false })),
@@ -249,6 +260,28 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
         </View>
       );
     }
+    const isUnlockedProfileMode = asFullScreen && !plazaContactsLocked;
+    const contactId = plazaUserIdByPhone[item.phone];
+
+    if (isUnlockedProfileMode) {
+      return (
+        <Pressable
+          style={styles.contactItem}
+          onPress={() => {
+            if (contactId) router.push(asFullScreen ? `/contact/${contactId}?from=add-friends` : `/contact/${contactId}`);
+          }}
+          disabled={!contactId}
+        >
+          <View style={styles.contactInfo}>
+            <View style={styles.contactNameRow}>
+              <Text style={styles.contactName}>{item.name}</Text>
+            </View>
+            <Text style={styles.contactPhone}>{item.phone}</Text>
+          </View>
+        </Pressable>
+      );
+    }
+
     return (
       <Pressable
         style={styles.contactItem}
@@ -265,9 +298,11 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
         <View style={styles.contactInfo}>
           <View style={styles.contactNameRow}>
             <Text style={styles.contactName}>{item.name}</Text>
-            <View style={styles.plazaBadge}>
-              <Text style={styles.plazaBadgeText}>On Plaza</Text>
-            </View>
+            {!asFullScreen && (
+              <View style={styles.plazaBadge}>
+                <Text style={styles.plazaBadgeText}>On Plaza</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.contactPhone}>{item.phone}</Text>
         </View>
@@ -277,9 +312,8 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
 
   const showDevButton = (process.env.EXPO_PUBLIC_API_URL?.includes('dev') || process.env.EXPO_PUBLIC_API_URL?.includes('localhost') || __DEV__) as boolean;
 
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => onClose()}>
-      <View style={styles.modalContainer}>
+  const inner = (
+    <View style={styles.modalContainer}>
         <View style={styles.modalHeader}>
           <Pressable onPress={() => onClose()}>
             <Text style={styles.modalCloseButton}>Close</Text>
@@ -383,7 +417,14 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
                   return (
                     <Pressable
                       key={group.id}
-                      onPress={() => (groupsLocked ? toggleGroup(group.id) : setEditingGroupId(group.id))}
+                      onPress={() => {
+                        if (groupsLocked) {
+                          toggleGroup(group.id);
+                        } else {
+                          router.push(`/(tabs)/activity/groups/${group.id}`);
+                          // Don't close modal so back from group screen returns here
+                        }
+                      }}
                     >
                       <View style={styles.groupAvatarWrapper}>
                         <View style={styles.groupAvatarWithBadge}>
@@ -425,7 +466,20 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
               renderItem={({ item }) =>
                 item.type === 'header' ? (
                   <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionHeaderText}>{item.title}</Text>
+                    {asFullScreen && item.key === 'plaza-header' ? (
+                      <View style={styles.groupsSectionHeaderRow}>
+                        <Text style={styles.sectionHeaderText}>{item.title}</Text>
+                        <Pressable
+                          onPress={() => setPlazaContactsLocked((p) => !p)}
+                          style={styles.groupsLockButton}
+                          hitSlop={10}
+                        >
+                          <Ionicons name={plazaContactsLocked ? 'lock-closed' : 'lock-open'} size={20} color="#007AFF" />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Text style={styles.sectionHeaderText}>{item.title}</Text>
+                    )}
                   </View>
                 ) : (
                   renderContactItem(item.contact, item.isPlaza)
@@ -445,6 +499,15 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
           )}
         </View>
       </View>
+  );
+
+  if (asFullScreen) {
+    if (!visible) return null;
+    return <View style={{ flex: 1 }}>{inner}</View>;
+  }
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => onClose()}>
+      {inner}
     </Modal>
   );
 }
