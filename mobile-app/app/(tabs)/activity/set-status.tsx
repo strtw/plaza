@@ -49,6 +49,7 @@ export default function SetStatusScreen() {
   const [message, setMessage] = useState('');
   const [location, setLocation] = useState<'home' | 'greenspace' | 'third-place' | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(() => getDefaultEndTime());
+  const [timeTouched, setTimeTouched] = useState(false);
   const [showFindFriendsModal, setShowFindFriendsModal] = useState(false);
   const [friendsCount, setFriendsCount] = useState(0);
 
@@ -128,13 +129,22 @@ export default function SetStatusScreen() {
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === 'ios') {
-      if (event.type === 'set' && selectedDate) setEndTime(roundToNearest15Minutes(selectedDate));
+      if (event.type === 'set' && selectedDate) {
+        setEndTime(roundToNearest15Minutes(selectedDate));
+        setTimeTouched(true);
+      }
     } else if (selectedDate) {
       setEndTime(roundToNearest15Minutes(selectedDate));
+      setTimeTouched(true);
     }
   };
 
-  const isFormReady = message.trim().length > 0 && location !== null && endTime !== null;
+  const isFormReady =
+    message.trim().length > 0 &&
+    location !== null &&
+    endTime !== null &&
+    timeTouched &&
+    friendsCount >= 2;
   const hasExistingStatus = !!storeStatus && !!currentStatus;
 
   if (!isLoaded || !isSignedIn) return null;
@@ -241,7 +251,10 @@ export default function SetStatusScreen() {
             <Text style={styles.sectionLabel}>I'm available until:</Text>
             <Text style={styles.requiredIndicator}>Required</Text>
           </View>
-          <View style={[styles.timePickerContainer, !endTime && styles.timePickerContainerIncomplete]}>
+          <Pressable
+            style={[styles.timePickerContainer, !timeTouched && styles.timePickerContainerIncomplete]}
+            onPress={() => setTimeTouched(true)}
+          >
             {Platform.OS === 'ios' ? (
               <DateTimePicker
                 value={endTime || getDefaultEndTime()}
@@ -258,9 +271,9 @@ export default function SetStatusScreen() {
                 onChange={handleTimeChange}
               />
             )}
-          </View>
-          {!endTime && (
-            <Text style={styles.helperText}>Select when your status should clear</Text>
+          </Pressable>
+          {!timeTouched && (
+            <Text style={styles.helperText}>Tap the time selector to continue</Text>
           )}
         </View>
 
@@ -270,6 +283,7 @@ export default function SetStatusScreen() {
             <Text style={styles.requiredIndicator}>Required</Text>
           </View>
           <Pressable style={styles.tellFriendsButton} onPress={() => setShowFindFriendsModal(true)}>
+            <Ionicons name="add" size={28} color="#007AFF" />
             <Ionicons name="people" size={28} color="#007AFF" />
             {friendsCount > 0 && (
               <Text style={styles.tellFriendsCount}>({friendsCount})</Text>

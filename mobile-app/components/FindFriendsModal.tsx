@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Animated,
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
@@ -36,6 +37,51 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [contactsInPlaza, setContactsInPlaza] = useState<Set<string>>(new Set());
+  const noteWiggle = useRef(new Animated.Value(0)).current;
+  const tenSecondTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasStartedWiggleTimer = useRef(false);
+
+  const runNoteWiggle = () => {
+    Animated.sequence([
+      Animated.timing(noteWiggle, { toValue: 1, duration: 100, useNativeDriver: true }),
+      Animated.timing(noteWiggle, { toValue: -1, duration: 100, useNativeDriver: true }),
+      Animated.timing(noteWiggle, { toValue: 1, duration: 100, useNativeDriver: true }),
+      Animated.timing(noteWiggle, { toValue: 0, duration: 100, useNativeDriver: true }),
+    ]).start(() => noteWiggle.setValue(0));
+  };
+
+  // When modal closes, clear the wiggle timer and reset so next time we can start again
+  useEffect(() => {
+    if (!visible) {
+      if (tenSecondTimer.current) {
+        clearTimeout(tenSecondTimer.current);
+        tenSecondTimer.current = null;
+      }
+      hasStartedWiggleTimer.current = false;
+    }
+  }, [visible]);
+
+  // Start 10s wiggle timer only when exactly one user is selected; wiggle runs once at 10s. Re-opening with 2+ selected does not wiggle.
+  useEffect(() => {
+    if (!visible) return;
+    if (selectedContacts.size < 1) {
+      if (tenSecondTimer.current) {
+        clearTimeout(tenSecondTimer.current);
+        tenSecondTimer.current = null;
+      }
+      hasStartedWiggleTimer.current = false;
+      return;
+    }
+    if (selectedContacts.size > 1) return; // e.g. re-opened with 2+ already selected — never start timer
+    if (hasStartedWiggleTimer.current) return;
+    hasStartedWiggleTimer.current = true;
+    tenSecondTimer.current = setTimeout(runNoteWiggle, 10000);
+  }, [visible, selectedContacts.size]);
+
+  const noteRotation = noteWiggle.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-4deg', '0deg', '4deg'],
+  });
 
   const checkContactsMutation = useMutation({ mutationFn: api.checkContacts });
   const matchContactsMutation = useMutation({
@@ -248,14 +294,14 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
               </Pressable>
             )}
             <Pressable
-              style={[styles.doneButton, (selectedContacts.size === 0 || matchContactsMutation.isPending || checkContactsMutation.isPending) && styles.doneButtonDisabled]}
+              style={[styles.doneButton, (selectedContacts.size < 2 || matchContactsMutation.isPending || checkContactsMutation.isPending) && styles.doneButtonDisabled]}
               onPress={handleDone}
-              disabled={selectedContacts.size === 0 || matchContactsMutation.isPending || checkContactsMutation.isPending}
+              disabled={selectedContacts.size < 2 || matchContactsMutation.isPending || checkContactsMutation.isPending}
             >
               {matchContactsMutation.isPending || checkContactsMutation.isPending ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={[styles.doneButtonText, selectedContacts.size === 0 && styles.doneButtonTextDisabled]}>
+                <Text style={[styles.doneButtonText, selectedContacts.size < 2 && styles.doneButtonTextDisabled]}>
                   Done
                 </Text>
               )}
@@ -263,7 +309,10 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
           </View>
         </View>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Tell some friends</Text>
+          <Text style={styles.modalTitle}>Add friends</Text>
+          <Animated.Text style={[styles.modalNote, { transform: [{ rotate: noteRotation }] }]}>
+            A two friend minimum is required to set a status
+          </Animated.Text>
 
           {!isLoadingContacts && deviceContacts.length > 0 && (
             <View style={styles.searchContainer}>
@@ -357,6 +406,7 @@ const styles = StyleSheet.create({
   doneButtonTextDisabled: { color: '#999' },
   modalContent: { flex: 1, padding: 20 },
   modalTitle: { fontSize: 28, fontWeight: 'bold', marginBottom: 8 },
+  modalNote: { fontSize: 14, color: '#666', marginBottom: 16 },
   modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 20 },
   searchContainer: { marginBottom: 16 },
   searchInput: { backgroundColor: '#f5f5f5', borderRadius: 8, padding: 12, fontSize: 16, color: '#000', borderWidth: 1, borderColor: '#e0e0e0' },
