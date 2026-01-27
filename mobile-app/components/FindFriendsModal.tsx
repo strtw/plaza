@@ -272,6 +272,9 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false }: Fin
           }}
           disabled={!contactId}
         >
+          <View style={styles.gearIconWrapper}>
+            <Ionicons name="settings-outline" size={22} color="#007AFF" />
+          </View>
           <View style={styles.contactInfo}>
             <View style={styles.contactNameRow}>
               <Text style={styles.contactName}>{item.name}</Text>
@@ -592,6 +595,7 @@ const styles = StyleSheet.create({
   settingsButton: { backgroundColor: '#007AFF', padding: 12, borderRadius: 8, alignItems: 'center' },
   settingsButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   contactItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
+  gearIconWrapper: { width: 24, height: 24, marginRight: 12, alignItems: 'center', justifyContent: 'center' },
   checkbox: { width: 24, height: 24, borderWidth: 2, borderColor: '#007AFF', borderRadius: 4, marginRight: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
   checkboxChecked: { backgroundColor: '#007AFF' },
   checkboxInner: { width: 8, height: 8, borderRadius: 2, backgroundColor: '#fff' },
