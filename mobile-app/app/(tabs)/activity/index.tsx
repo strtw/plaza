@@ -1,15 +1,14 @@
 import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, Easing, LayoutAnimation, UIManager, PanResponder, Switch } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createApi } from '../../lib/api';
-import { ContactListItem } from '../../components/ContactListItem';
-import { AvailabilityStatus, StatusLocation, ContactStatus, getFullName } from '../../lib/types';
+import { createApi } from '../../../lib/api';
+import { ContactListItem } from '../../../components/ContactListItem';
+import { AvailabilityStatus, StatusLocation, ContactStatus, getFullName } from '../../../lib/types';
 import { useAuth } from '@clerk/clerk-expo';
 import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { useUserStore } from '../../stores/userStore';
+import { useUserStore } from '../../../stores/userStore';
 
 // Animated wrapper component for new contact items (fade in with opacity pulse)
 const AnimatedContactListItem = ({ contact, previousStatus }: { contact: any; previousStatus?: any }) => {
@@ -298,14 +297,7 @@ function ActivityScreenContent() {
   // Track locally muted contacts for immediate UI updates (before query refetch)
   const [locallyMutedContacts, setLocallyMutedContacts] = useState<Set<string>>(new Set());
 
-  // Modal state
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [message, setMessage] = useState('');
-  const [location, setLocation] = useState<'home' | 'greenspace' | 'third-place' | null>(null);
-  
-  const [endTime, setEndTime] = useState<Date | null>(() => {
-    return getDefaultEndTime();
-  });
+  // Set-status is now a route; no modal state here
 
   // All hooks must be called before any conditional returns
   const { data: contacts, isLoading, refetch } = useQuery({
@@ -421,100 +413,7 @@ function ActivityScreenContent() {
     return () => clearInterval(interval);
   }, [storeStatus, statusState, queryClient, statusGrayAnim]);
 
-  const createStatusMutation = useMutation({
-    mutationFn: api.createStatus,
-    onMutate: async (newStatus) => {
-      // Cancel outgoing queries
-      await queryClient.cancelQueries({ queryKey: ['my-status'] });
-      
-      // Snapshot previous value
-      const previousStatus = queryClient.getQueryData(['my-status']);
-      
-      // Create optimistic status object (matches ContactStatus interface)
-      const optimisticStatus = {
-        id: `temp-${Date.now()}`, // Temporary ID
-        status: newStatus.status,
-        message: newStatus.message,
-        location: newStatus.location,
-        startTime: newStatus.startTime,
-        endTime: newStatus.endTime,
-      } as ContactStatus;
-      
-      // Optimistically update cache and store immediately
-      queryClient.setQueryData(['my-status'], optimisticStatus);
-      setCurrentStatus(optimisticStatus);
-      setStatusState('active'); // New status is active
-      // Reset fade animations in case they were previously faded out/grayed
-      statusFadeAnim.setValue(1);
-      statusGrayAnim.setValue(1);
-      
-      return { previousStatus };
-    },
-    onSuccess: (data) => {
-      // Update with real data from server (includes real ID and all fields)
-      queryClient.setQueryData(['my-status'], data);
-      setCurrentStatus(data as ContactStatus);
-      setStatusState('active'); // New status is active
-
-      // Invalidate to ensure everything is in sync
-      queryClient.invalidateQueries({ queryKey: ['my-status'] });
-      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
-      
-      // Reset form state
-      setMessage('');
-      setLocation(null);
-      setEndTime(getDefaultEndTime());
-      setShowStatusModal(false);
-    },
-    onError: (error: any, variables, context) => {
-      // Rollback optimistic update
-      if (context?.previousStatus) {
-        queryClient.setQueryData(['my-status'], context.previousStatus);
-        setCurrentStatus(context.previousStatus as ContactStatus | null);
-      }
-      Alert.alert('Error', error.message || 'Failed to set status. Please try again.');
-    },
-  });
-
-  const deleteStatusMutation = useMutation({
-    mutationFn: api.deleteMyStatus,
-    onMutate: async () => {
-      // Cancel outgoing queries
-      await queryClient.cancelQueries({ queryKey: ['my-status'] });
-      // Snapshot previous value
-      const previousStatus = queryClient.getQueryData(['my-status']);
-      // Mark as cleared but keep status data for display until refresh
-      // Don't clear storeStatus - we need it to show "Status cleared by user" message
-      setStatusState('cleared');
-      // Optimistically set query cache to null
-      queryClient.setQueryData(['my-status'], null);
-      // Trigger fade-to-gray animation with smooth easing
-      Animated.timing(statusGrayAnim, {
-        toValue: 0.6,
-        duration: 300,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }).start();
-      return { previousStatus };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-status'] });
-      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
-      setShowStatusModal(false);
-      // Reset status state after successful clear so user can set a new status
-      // Keep storeStatus temporarily for display, but allow modal to open
-      // The status will be fully cleared after refresh or when API confirms it's gone
-    },
-    onError: (error: any, variables, context) => {
-      // Rollback optimistic update
-      if (context?.previousStatus) {
-        queryClient.setQueryData(['my-status'], context.previousStatus);
-        setCurrentStatus(context.previousStatus as any);
-        setStatusState('active'); // Restore to active state
-      }
-      Alert.alert('Error', error.message || 'Failed to clear status. Please try again.');
-    },
-  });
+  // createStatusMutation and deleteStatusMutation live in set-status screen
 
   // Mutation for muting a friend
   const muteFriendMutation = useMutation({
@@ -1200,61 +1099,6 @@ function ActivityScreenContent() {
     return hasAnyStatuses && activeContacts.length === 0;
   }, [contactsWithStatus, activeContacts]);
 
-  const handleSaveStatus = () => {
-    if (!message.trim() || !location || !endTime) {
-      return;
-    }
-    
-    // Map frontend location format to backend enum
-    const locationMap: Record<'home' | 'greenspace' | 'third-place', string> = {
-      'home': 'HOME',
-      'greenspace': 'GREENSPACE',
-      'third-place': 'THIRD_PLACE',
-    };
-    
-    const locationValue = locationMap[location];
-    
-    // Get all friend IDs for sharedWith (for now, share with all friends)
-    // TODO: Add UI for selecting specific recipients
-    const friendIds = contacts?.map((c: any) => c.id).filter(Boolean) || [];
-    
-    console.log('[Activity] Creating status with:', {
-      status: AvailabilityStatus.AVAILABLE,
-      message: message.trim(),
-      location: locationValue,
-      startTime: new Date().toISOString(),
-      endTime: endTime.toISOString(),
-      sharedWith: friendIds,
-    });
-    
-    createStatusMutation.mutate({
-      status: AvailabilityStatus.AVAILABLE,
-      message: message.trim(),
-      location: locationValue,
-      startTime: new Date().toISOString(), // Current time
-      endTime: endTime.toISOString(),
-      sharedWith: friendIds, // Share with all friends by default
-    });
-  };
-
-  const handleTimeChange = (event: any, selectedDate?: Date) => {
-    // On iOS, only update when user confirms selection (event.type === 'set')
-    if (Platform.OS === 'ios') {
-      if (event.type === 'set' && selectedDate) {
-        setEndTime(roundToNearest15Minutes(selectedDate));
-      }
-    } else {
-      // Android
-      if (selectedDate) {
-        setEndTime(roundToNearest15Minutes(selectedDate));
-      }
-    }
-  };
-
-  // Check if form is ready to save (message, location, and endTime are set)
-  const isFormReady = message.trim().length > 0 && location !== null && endTime !== null;
-
-
   // Render update banner component - hide when filters are hiding all users
   const renderUpdateBanner = () => {
     // Hide banner when all users are filtered out
@@ -1325,22 +1169,8 @@ function ActivityScreenContent() {
             (statusState === 'expired' || statusState === 'cleared') && styles.statusInputContainerDisabled
           ]}
           onPress={() => {
-            // Don't allow opening modal if status is expired
-            if (statusState === 'expired') {
-              return;
-            }
-            // Populate form with current status if it exists and is active, otherwise reset
-            if (storeStatus && statusState === 'active') {
-              setMessage(storeStatus.message);
-              setLocation(mapBackendToFrontendLocation(storeStatus.location));
-              setEndTime(new Date(storeStatus.endTime));
-            } else {
-              // Reset form for new status (or when status is cleared/expired)
-              setMessage('');
-              setLocation(null);
-              setEndTime(null); // Require user to select time
-            }
-            setShowStatusModal(true);
+            if (statusState === 'expired') return;
+            router.push('/(tabs)/activity/set-status');
           }}
           disabled={statusState === 'expired'}
         >
@@ -1647,19 +1477,7 @@ function ActivityScreenContent() {
                 <Text style={{ fontSize: 20, color: '#666', textAlign: 'center', lineHeight: 28, marginTop: 12 }}>
                   Maybe it's the perfect time to{' '}
                   <Pressable
-                    onPress={() => {
-                      // Populate form with current status if it exists, otherwise reset
-                      if (storeStatus) {
-                        setMessage(storeStatus.message);
-                        setLocation(mapBackendToFrontendLocation(storeStatus.location));
-                        setEndTime(new Date(storeStatus.endTime));
-                      } else {
-                        setMessage('');
-                        setLocation(null);
-                        setEndTime(null); // Require user to select time
-                      }
-                      setShowStatusModal(true);
-                    }}
+                    onPress={() => router.push('/(tabs)/activity/set-status')}
                   >
                     <Text style={{ fontSize: 20, color: '#007AFF', fontWeight: '600' }}>
                       share yours?
@@ -1685,185 +1503,6 @@ function ActivityScreenContent() {
           </View>
         }
       />
-      
-      <Modal
-        visible={showStatusModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowStatusModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalHeader, { paddingTop: insets.top + 16 }]}>
-            <Pressable onPress={() => setShowStatusModal(false)} style={styles.closeButton}>
-              <Ionicons name="close" size={28} color="#000" />
-            </Pressable>
-            <Text style={styles.modalTitle}>Set your status</Text>
-            {isFormReady && (
-              <Pressable 
-                onPress={handleSaveStatus}
-                style={styles.checkmarkButton}
-                disabled={createStatusMutation.isPending}
-              >
-                <Ionicons 
-                  name="checkmark" 
-                  size={28} 
-                  color={createStatusMutation.isPending ? "#999" : "#007AFF"} 
-                />
-              </Pressable>
-            )}
-            {!isFormReady && <View style={styles.checkmarkButton} />}
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.messageContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionLabel}>Message</Text>
-                <Text style={styles.requiredIndicator}>Required</Text>
-              </View>
-              <TextInput
-                value={message}
-                onChangeText={setMessage}
-                placeholder="Tell your friends where to meet you and what you're up to."
-                placeholderTextColor="#333"
-                style={[
-                  styles.messageInput,
-                  !message.trim() && styles.inputIncomplete
-                ]}
-                multiline
-                maxLength={140}
-                autoFocus
-              />
-              <View style={styles.inputFooter}>
-                <Text style={styles.helperText}>
-                  {!message.trim() ? 'Enter a message to share your status' : ''}
-                </Text>
-                <Text style={styles.characterCount}>
-                  {message.length}/140
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.locationContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionLabel}>Location</Text>
-                <Text style={styles.requiredIndicator}>Required</Text>
-              </View>
-              <View style={styles.locationSelectorContainer}>
-                <Pressable
-                  style={[
-                    styles.locationOption, 
-                    location === 'home' && styles.locationOptionSelected,
-                    !location && styles.locationOptionIncomplete
-                  ]}
-                  onPress={() => setLocation('home')}
-                >
-                  <Ionicons 
-                    name="home-outline" 
-                    size={24} 
-                    color={location === 'home' ? '#007AFF' : '#666'} 
-                  />
-                  <Text style={[styles.locationOptionText, location === 'home' && styles.locationOptionTextSelected]}>
-                    Home
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.locationOption, 
-                    location === 'greenspace' && styles.locationOptionSelected,
-                    !location && styles.locationOptionIncomplete
-                  ]}
-                  onPress={() => setLocation('greenspace')}
-                >
-                  <Ionicons 
-                    name="leaf" 
-                    size={24} 
-                    color={location === 'greenspace' ? '#007AFF' : '#666'} 
-                  />
-                  <Text style={[styles.locationOptionText, location === 'greenspace' && styles.locationOptionTextSelected]}>
-                    Greenspace
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.locationOption, 
-                    location === 'third-place' && styles.locationOptionSelected,
-                    !location && styles.locationOptionIncomplete
-                  ]}
-                  onPress={() => setLocation('third-place')}
-                >
-                  <Ionicons 
-                    name="business" 
-                    size={24} 
-                    color={location === 'third-place' ? '#007AFF' : '#666'} 
-                  />
-                  <Text style={[styles.locationOptionText, location === 'third-place' && styles.locationOptionTextSelected]}>
-                    Third Place
-                  </Text>
-                </Pressable>
-              </View>
-              {!location && (
-                <Text style={styles.helperText}>Select where you'll be</Text>
-              )}
-            </View>
-
-            <View style={styles.timeContainer}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionLabel}>I'm available until:</Text>
-                <Text style={styles.requiredIndicator}>Required</Text>
-              </View>
-              <View style={[
-                styles.timePickerContainer,
-                !endTime && styles.timePickerContainerIncomplete
-              ]}>
-                {Platform.OS === 'ios' ? (
-                  <DateTimePicker
-                    value={endTime || getDefaultEndTime()}
-                    mode="time"
-                    display="default"
-                    minuteInterval={15}
-                    onChange={handleTimeChange}
-                  />
-                ) : (
-                  <DateTimePicker
-                    value={endTime || getDefaultEndTime()}
-                    mode="time"
-                    minuteInterval={15}
-                    onChange={handleTimeChange}
-                  />
-                )}
-              </View>
-              {!endTime && (
-                <Text style={styles.helperText}>Select when your status should clear</Text>
-              )}
-            </View>
-
-            {/* Clear Status Button */}
-            {storeStatus && (
-              <View style={styles.clearStatusContainer}>
-                <Pressable
-                  style={styles.clearStatusButton}
-                  onPress={() => {
-                    Alert.alert(
-                      'Clear Status',
-                      'Are you sure you want to clear your current status?',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Clear',
-                          style: 'destructive',
-                          onPress: () => deleteStatusMutation.mutate(),
-                        },
-                      ]
-                    );
-                  }}
-                  disabled={deleteStatusMutation.isPending}
-                >
-                  <Text style={styles.clearStatusText}>Clear Status</Text>
-                </Pressable>
-              </View>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
 
       {/* Filters Modal */}
       <Modal
@@ -2339,6 +1978,23 @@ const styles = StyleSheet.create({
   clearStatusText: {
     fontSize: 16,
     color: '#FF3B30',
+    fontWeight: '600',
+  },
+  tellFriendsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#007AFF',
+    backgroundColor: 'transparent',
+    alignSelf: 'flex-start',
+  },
+  tellFriendsButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
     fontWeight: '600',
   },
   updateBanner: {
