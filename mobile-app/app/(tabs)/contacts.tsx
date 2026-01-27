@@ -1,4 +1,4 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, Pressable, Alert, Linking, AppState, TextInput } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, Pressable, Alert, Linking, AppState, TextInput, ScrollView } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { ContactListItem } from '../../components/ContactListItem';
@@ -640,6 +640,41 @@ function HomeScreenContent() {
                 />
               </View>
             )}
+
+            {/* Selected contacts – horizontal scroll, name + X to deselect */}
+            {selectedContacts.size > 0 && (
+              <View style={styles.selectedPillsSection}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.selectedPillsScroll}
+                  contentContainerStyle={styles.selectedPillsContent}
+                >
+                  {Array.from(selectedContacts).map((phone) => {
+                    const contact = deviceContacts.find((c) => c.phone === phone);
+                    const name = contact?.name ?? phone;
+                    return (
+                      <View key={phone} style={styles.selectedPill}>
+                        <Text style={styles.selectedPillText} numberOfLines={1}>{name}</Text>
+                        <Pressable
+                          style={styles.selectedPillX}
+                          onPress={() => {
+                            setSelectedContacts((prev) => {
+                              const next = new Set(prev);
+                              next.delete(phone);
+                              return next;
+                            });
+                          }}
+                          hitSlop={10}
+                        >
+                          <Ionicons name="close-circle" size={20} color="#333" />
+                        </Pressable>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
             
             {needsFullAccess && (
               <View style={styles.permissionWarningBox}>
@@ -1047,6 +1082,41 @@ const styles = StyleSheet.create({
     color: '#000',
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  selectedPillsSection: {
+    marginBottom: 16,
+  },
+  selectedPillsScroll: {
+    flexGrow: 0,
+    height: 44,
+  },
+  selectedPillsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 24,
+  },
+  selectedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F4FD',
+    paddingVertical: 8,
+    paddingLeft: 12,
+    paddingRight: 4,
+    borderRadius: 20,
+    gap: 6,
+  },
+  selectedPillText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+    maxWidth: 140,
+  },
+  selectedPillX: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
