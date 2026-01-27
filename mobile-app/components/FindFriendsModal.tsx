@@ -431,7 +431,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false }: Fin
                     >
                       <View style={styles.groupAvatarWrapper}>
                         <View style={styles.groupAvatarWithBadge}>
-                          <View style={[styles.groupAvatar, { backgroundColor: group.backgroundColor }, isSelected && styles.groupAvatarSelected]}>
+                          <View style={[styles.groupAvatar, { backgroundColor: group.backgroundColor }, isSelected && styles.groupAvatarSelected, !groupsLocked && styles.groupAvatarUnlocked]}>
                             <Text style={styles.groupAvatarLetter}>{group.letter}</Text>
                           </View>
                           <View style={styles.groupCountBadge}>
@@ -579,6 +579,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   groupAvatarSelected: { borderWidth: 2, borderColor: '#007AFF' },
+  groupAvatarUnlocked: { borderWidth: 2, borderColor: '#007AFF', borderStyle: 'dashed' },
   groupAvatarLetter: { fontSize: 18, fontWeight: '600', color: '#333' },
   groupAvatarLabel: { fontSize: 12, color: '#666', fontWeight: '500' },
   selectedPillsSection: { marginBottom: 16 },
