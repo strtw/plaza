@@ -1201,7 +1201,7 @@ function ActivityScreenContent() {
                         ? 'Status expired'
                         : storeStatus && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)
                           ? storeStatus.message
-                          : 'Invite some friends to hang'}
+                          : 'What are you up to?'}
                   </Text>
                 </View>
               </View>
@@ -1220,8 +1220,8 @@ function ActivityScreenContent() {
                   </View>
                 ) : null}
                 {!statusState && !storeStatus && !currentStatus && (
-                  <View style={styles.myStatusRowInviteButton}>
-                    <Ionicons name="person-add-outline" size={18} color="#fff" />
+                  <View style={styles.myStatusRowAddStatusPill}>
+                    <Text style={styles.myStatusRowAddStatusPillText}>+ Add status</Text>
                   </View>
                 )}
                 {storeStatus?.location && (statusState !== 'expired' && statusState !== 'cleared') && (
@@ -1898,13 +1898,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  myStatusRowInviteButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 6,
+  myStatusRowAddStatusPill: {
     backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  myStatusRowAddStatusPillText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   myStatusRowTimeBubble: {
     paddingHorizontal: 6,
