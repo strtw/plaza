@@ -173,7 +173,6 @@ export default function SetStatusScreen() {
           <TextInput
             value={message}
             onChangeText={setMessage}
-            placeholder="Tell your friends where to meet you and what you're up to."
             placeholderTextColor="#333"
             style={[styles.messageInput, !message.trim() && styles.inputIncomplete]}
             multiline
@@ -182,7 +181,7 @@ export default function SetStatusScreen() {
           />
           <View style={styles.inputFooter}>
             <Text style={styles.helperText}>
-              {!message.trim() ? 'Enter a message to share your status' : ''}
+              {!message.trim() ? 'Tell your friends where to meet you and what to expect' : ''}
             </Text>
             <Text style={styles.characterCount}>{message.length}/140</Text>
           </View>

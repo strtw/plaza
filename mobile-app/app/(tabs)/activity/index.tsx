@@ -1163,64 +1163,80 @@ function ActivityScreenContent() {
         </Pressable>
       </View>
       <Animated.View style={{ opacity: Animated.multiply(statusFadeAnim, statusGrayAnim) }}>
-        <Pressable 
+        <Pressable
           style={[
-            styles.statusInputContainer,
-            (statusState === 'expired' || statusState === 'cleared') && styles.statusInputContainerDisabled
+            styles.myStatusRowContainer,
+            (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowContainerDisabled
           ]}
-          onPress={() => {
-            if (statusState === 'expired') return;
-            router.push('/(tabs)/activity/set-status');
-          }}
-          disabled={statusState === 'expired'}
+          onPress={() => router.push('/(tabs)/activity/set-status')}
         >
-          <View style={styles.statusInputWrapper}>
-            {/* Avatar placeholder with status-aware styling */}
+          <View style={styles.myStatusRowAvatarContainer}>
             <View style={[
-              styles.avatarContainer,
+              styles.myStatusRowAvatar,
               (statusState === 'expired' || statusState === 'cleared')
-                ? styles.avatarContainerDisabled
-                : (!storeStatus || !currentStatus) 
-                  ? styles.avatarContainerInactive 
-                  : (storeStatus.status === AvailabilityStatus.AVAILABLE 
-                      ? styles.avatarContainerActive 
-                      : styles.avatarContainerInactive)
+                ? styles.avatarDisabled
+                : { backgroundColor: '#E5E5E5' }
             ]}>
-              <View style={[
-                styles.avatar,
-                (statusState === 'expired' || statusState === 'cleared')
-                  ? styles.avatarDisabled
-                  : (!storeStatus || !currentStatus) 
-                    ? { backgroundColor: '#E5E5E5' }
-                    : { backgroundColor: getAvatarColor() }
-              ]}>
+              <Text style={[
+                styles.avatarText,
+                (statusState === 'expired' || statusState === 'cleared') && styles.avatarTextDisabled
+              ]}>{getInitials()}</Text>
+            </View>
+          </View>
+          <View style={styles.myStatusRowContent}>
+            <View style={styles.myStatusRowNameRow}>
+              <View style={styles.myStatusRowNameAndStatus}>
                 <Text style={[
-                  styles.avatarText,
-                  (statusState === 'expired' || statusState === 'cleared') && styles.avatarTextDisabled
-                ]}>{getInitials()}</Text>
+                  styles.myStatusRowName,
+                  (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowNameDisabled
+                ]} numberOfLines={1}>You</Text>
+                <View style={styles.myStatusRowMessageRow}>
+                  <Text style={[
+                    styles.myStatusRowMessage,
+                    (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowMessageDisabled
+                  ]} numberOfLines={1}>
+                    {statusState === 'cleared'
+                      ? 'Status cleared by user'
+                      : statusState === 'expired'
+                        ? 'Status expired'
+                        : storeStatus && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)
+                          ? storeStatus.message
+                          : 'Invite some friends to hang'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.myStatusRowRightIcons}>
+                {statusState === 'expired' && storeStatus?.endTime ? (
+                  <View style={[styles.myStatusRowTimeBubble, styles.myStatusRowExpiredBubble]}>
+                    <Text style={styles.myStatusRowTimeBubbleText}>expired</Text>
+                  </View>
+                ) : statusState === 'cleared' && storeStatus?.endTime ? (
+                  <View style={[styles.myStatusRowTimeBubble, styles.myStatusRowClearedBubble]}>
+                    <Text style={styles.myStatusRowTimeBubbleText}>cleared</Text>
+                  </View>
+                ) : storeStatus?.endTime && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus) && getTimeRemaining(storeStatus.endTime) ? (
+                  <View style={[styles.myStatusRowTimeBubble, { backgroundColor: '#25D366' }]}>
+                    <Text style={styles.myStatusRowTimeBubbleText}>{getTimeRemaining(storeStatus.endTime)}</Text>
+                  </View>
+                ) : null}
+                {!statusState && !storeStatus && !currentStatus && (
+                  <View style={styles.myStatusRowInviteButton}>
+                    <Ionicons name="person-add-outline" size={18} color="#fff" />
+                  </View>
+                )}
+                {storeStatus?.location && (statusState !== 'expired' && statusState !== 'cleared') && (
+                  <Ionicons
+                    name={
+                      storeStatus.location === StatusLocation.HOME ? 'home-outline' :
+                      storeStatus.location === StatusLocation.GREENSPACE ? 'leaf' :
+                      storeStatus.location === StatusLocation.THIRD_PLACE ? 'business' : 'location'
+                    }
+                    size={20}
+                    color="#666"
+                  />
+                )}
               </View>
             </View>
-            <TextInput
-              style={[
-                styles.statusInput,
-                (statusState === 'expired' || statusState === 'cleared') && styles.statusInputDisabled,
-                { fontSize: 14 }
-              ]}
-              placeholder="Set my status (your friends come to you!)"
-              placeholderTextColor="#333"
-              editable={false}
-              pointerEvents="none"
-              value={
-                statusState === 'cleared'
-                  ? 'Status cleared by user'
-                  : statusState === 'expired'
-                    ? 'Status expired'
-                    : currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)
-                      ? `${currentStatus.message}...for ${getTimeRemaining(currentStatus.endTime)}`
-                      : ''
-              }
-              numberOfLines={1}
-            />
           </View>
         </Pressable>
       </Animated.View>
@@ -1815,6 +1831,100 @@ const styles = StyleSheet.create({
   avatarTextDisabled: {
     color: '#999',
   },
+  myStatusRowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f0f8ff',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5E5',
+  },
+  myStatusRowContainerDisabled: {
+    backgroundColor: '#E8E8E8',
+    opacity: 0.85,
+  },
+  myStatusRowAvatarContainer: {
+    position: 'relative',
+    marginRight: 12,
+    overflow: 'visible',
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  myStatusRowAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E5E5E5',
+  },
+  myStatusRowContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  myStatusRowNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  myStatusRowNameAndStatus: {
+    flex: 1,
+    marginRight: 8,
+  },
+  myStatusRowName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
+  },
+  myStatusRowNameDisabled: {
+    color: '#999',
+  },
+  myStatusRowMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  myStatusRowMessage: {
+    fontSize: 14,
+    color: '#667781',
+    marginTop: 2,
+  },
+  myStatusRowMessageDisabled: {
+    color: '#999',
+  },
+  myStatusRowRightIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  myStatusRowInviteButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 6,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  myStatusRowTimeBubble: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  myStatusRowTimeBubbleText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  myStatusRowExpiredBubble: {
+    backgroundColor: '#F44336',
+  },
+  myStatusRowClearedBubble: {
+    backgroundColor: '#999',
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: '#fff',
@@ -2004,6 +2114,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#E3F2FD',
     paddingVertical: 12,
     paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#BBDEFB',
     borderBottomWidth: 1,
     borderBottomColor: '#BBDEFB',
     gap: 8,
