@@ -22,7 +22,7 @@ import { hashPhones } from '../lib/phone-hash.util';
 
 export type FindFriendsModalProps = {
   visible: boolean;
-  onClose: () => void;
+  onClose: (count?: number) => void;
 };
 
 export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
@@ -146,8 +146,9 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
       const phoneHashes = await hashPhones(selected.map((c) => c.phone), api.hashPhones);
       await matchContactsMutation.mutateAsync(phoneHashes);
       await queryClient.invalidateQueries({ queryKey: ['friends'] });
+      const count = selected.length;
       setSelectedContacts(new Set());
-      onClose();
+      onClose(count);
     } catch {
       // Error already shown by mutation
     }
@@ -215,10 +216,10 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
   const showDevButton = (process.env.EXPO_PUBLIC_API_URL?.includes('dev') || process.env.EXPO_PUBLIC_API_URL?.includes('localhost') || __DEV__) as boolean;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => onClose()}>
       <View style={styles.modalContainer}>
         <View style={styles.modalHeader}>
-          <Pressable onPress={onClose}>
+          <Pressable onPress={() => onClose()}>
             <Text style={styles.modalCloseButton}>Close</Text>
           </Pressable>
           <View style={styles.headerButtons}>

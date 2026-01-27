@@ -50,6 +50,7 @@ export default function SetStatusScreen() {
   const [location, setLocation] = useState<'home' | 'greenspace' | 'third-place' | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(() => getDefaultEndTime());
   const [showFindFriendsModal, setShowFindFriendsModal] = useState(false);
+  const [friendsCount, setFriendsCount] = useState(0);
 
   const { data: currentStatus } = useQuery({
     queryKey: ['my-status'],
@@ -145,21 +146,23 @@ export default function SetStatusScreen() {
           <Ionicons name="close" size={28} color="#000" />
         </Pressable>
         <Text style={styles.headerTitle}>Set your status</Text>
-        {isFormReady ? (
-          <Pressable
-            onPress={handleSaveStatus}
-            style={styles.checkmarkButton}
-            disabled={createStatusMutation.isPending}
+        <Pressable
+          onPress={handleSaveStatus}
+          style={[
+            styles.doneButton,
+            (!isFormReady || createStatusMutation.isPending) && styles.doneButtonDisabled,
+          ]}
+          disabled={!isFormReady || createStatusMutation.isPending}
+        >
+          <Text
+            style={[
+              styles.doneButtonText,
+              (!isFormReady || createStatusMutation.isPending) && styles.doneButtonTextDisabled,
+            ]}
           >
-            <Ionicons
-              name="checkmark"
-              size={28}
-              color={createStatusMutation.isPending ? '#999' : '#007AFF'}
-            />
-          </Pressable>
-        ) : (
-          <View style={styles.checkmarkButton} />
-        )}
+            Done
+          </Text>
+        </Pressable>
       </View>
       <ScrollView style={styles.content}>
         <View style={styles.messageContainer}>
@@ -269,6 +272,9 @@ export default function SetStatusScreen() {
           </View>
           <Pressable style={styles.tellFriendsButton} onPress={() => setShowFindFriendsModal(true)}>
             <Ionicons name="people" size={28} color="#007AFF" />
+            {friendsCount > 0 && (
+              <Text style={styles.tellFriendsCount}>({friendsCount})</Text>
+            )}
           </Pressable>
         </View>
 
@@ -294,7 +300,13 @@ export default function SetStatusScreen() {
         )}
       </ScrollView>
 
-      <FindFriendsModal visible={showFindFriendsModal} onClose={() => setShowFindFriendsModal(false)} />
+      <FindFriendsModal
+        visible={showFindFriendsModal}
+        onClose={(count) => {
+          setShowFindFriendsModal(false);
+          if (count !== undefined) setFriendsCount(count);
+        }}
+      />
     </View>
   );
 }
@@ -313,7 +325,17 @@ const styles = StyleSheet.create({
   },
   closeButton: { padding: 4, width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '600', color: '#000', flex: 1, textAlign: 'center' },
-  checkmarkButton: { padding: 4, width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+  doneButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  doneButtonDisabled: { backgroundColor: '#e0e0e0' },
+  doneButtonText: { fontSize: 16, color: '#fff', fontWeight: '600' },
+  doneButtonTextDisabled: { color: '#999' },
   content: { flex: 1, padding: 20 },
   messageContainer: { marginBottom: 28 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
@@ -364,6 +386,7 @@ const styles = StyleSheet.create({
   },
   tellFriendsContainer: { marginTop: 20, marginBottom: 20 },
   tellFriendsButton: {
+    flexDirection: 'row',
     alignSelf: 'flex-start',
     alignItems: 'center',
     justifyContent: 'center',
@@ -372,7 +395,9 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#007AFF',
     backgroundColor: 'transparent',
+    gap: 6,
   },
+  tellFriendsCount: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
   clearStatusContainer: { marginTop: 20, marginBottom: 20, alignItems: 'flex-end' },
   clearStatusButton: {
     paddingVertical: 12,
