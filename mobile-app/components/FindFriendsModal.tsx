@@ -37,6 +37,7 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [contactsInPlaza, setContactsInPlaza] = useState<Set<string>>(new Set());
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const noteWiggle = useRef(new Animated.Value(0)).current;
   const tenSecondTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStartedWiggleTimer = useRef(false);
@@ -208,9 +209,22 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
   const plazaUsers = filteredContacts.filter((c) => contactsInPlaza.has(c.phone));
   const nonPlazaUsers = filteredContacts.filter((c) => !contactsInPlaza.has(c.phone));
 
+  const demoGroups = [
+    { id: 'coffee', label: 'Coffee', letter: 'C', backgroundColor: '#E8D5B7', count: 3 },
+    { id: 'musicians', label: 'Musicians', letter: 'M', backgroundColor: '#D4E4F7', count: 5 },
+  ];
+  const toggleGroup = (groupId: string) => {
+    setSelectedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
   type ListItem = { type: 'header'; title: string; key: string } | { type: 'contact'; contact: { name: string; phone: string }; isPlaza: boolean };
   const listData: ListItem[] = [
-    ...(plazaUsers.length > 0 ? [{ type: 'header' as const, title: 'On Plaza', key: 'plaza-header' }] : []),
+    ...(plazaUsers.length > 0 ? [{ type: 'header' as const, title: 'contacts', key: 'plaza-header' }] : []),
     ...plazaUsers.map((c) => ({ type: 'contact' as const, contact: c, isPlaza: true })),
     ...(nonPlazaUsers.length > 0 ? [{ type: 'header' as const, title: 'Not on Plaza', key: 'non-plaza-header' }] : []),
     ...nonPlazaUsers.map((c) => ({ type: 'contact' as const, contact: c, isPlaza: false })),
@@ -347,6 +361,34 @@ export function FindFriendsModal({ visible, onClose }: FindFriendsModalProps) {
             </View>
           )}
 
+          {!isLoadingContacts && deviceContacts.length > 0 && (
+            <View style={styles.groupsSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeaderText}>my groups</Text>
+              </View>
+              <View style={styles.groupsRow}>
+                {demoGroups.map((group) => {
+                  const isSelected = selectedGroups.has(group.id);
+                  return (
+                    <Pressable key={group.id} onPress={() => toggleGroup(group.id)}>
+                      <View style={styles.groupAvatarWrapper}>
+                        <View style={styles.groupAvatarWithBadge}>
+                          <View style={[styles.groupAvatar, { backgroundColor: group.backgroundColor }, isSelected && styles.groupAvatarSelected]}>
+                            <Text style={styles.groupAvatarLetter}>{group.letter}</Text>
+                          </View>
+                          <View style={styles.groupCountBadge}>
+                            <Text style={styles.groupCountBadgeText}>{group.count}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.groupAvatarLabel}>{group.label}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           {needsFullAccess && (
             <View style={styles.permissionWarningBox}>
               <Text style={styles.permissionWarningTitle}>Limited Contact Access</Text>
@@ -410,6 +452,44 @@ const styles = StyleSheet.create({
   modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 20 },
   searchContainer: { marginBottom: 16 },
   searchInput: { backgroundColor: '#f5f5f5', borderRadius: 8, padding: 12, fontSize: 16, color: '#000', borderWidth: 1, borderColor: '#e0e0e0' },
+  groupsSection: { marginBottom: 16 },
+  groupsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, paddingTop: 12, paddingHorizontal: 4 },
+  groupAvatarAdd: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  groupAvatarWrapper: { alignItems: 'center', gap: 4 },
+  groupAvatarWithBadge: { position: 'relative' },
+  groupCountBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  groupCountBadgeText: { fontSize: 11, fontWeight: '600', color: '#fff' },
+  groupAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  groupAvatarSelected: { borderWidth: 2, borderColor: '#007AFF' },
+  groupAvatarLetter: { fontSize: 18, fontWeight: '600', color: '#333' },
+  groupAvatarLabel: { fontSize: 12, color: '#666', fontWeight: '500' },
   selectedPillsSection: { marginBottom: 16 },
   selectedPillsScroll: { flexGrow: 0, height: 44 },
   selectedPillsContent: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 24 },
