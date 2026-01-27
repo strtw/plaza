@@ -375,13 +375,17 @@ function ActivityScreenContent() {
         setStatusState('expired');
       }
     } else {
-      // No status from API - only clear if we don't have a stored expired/cleared status
-      // This allows expired/cleared statuses to persist until refresh
-      if (statusState === null || statusState === 'active') {
+      // No status from API - if status was cleared, reset state to allow setting new status
+      // If status was expired, keep it for display until refresh
+      if (statusState === 'cleared') {
+        // After successful clear, API confirms no status exists - reset to allow new status
+        setCurrentStatus(null);
+        setStatusState(null);
+      } else if (statusState === null || statusState === 'active') {
         setCurrentStatus(null);
         setStatusState(null);
       }
-      // If statusState is 'expired' or 'cleared', keep the storeStatus for display
+      // If statusState is 'expired', keep the storeStatus for display
     }
   }, [currentStatus, setCurrentStatus, statusState]);
 
@@ -461,7 +465,6 @@ function ActivityScreenContent() {
       setLocation(null);
       setEndTime(getDefaultEndTime());
       setShowStatusModal(false);
-      Alert.alert('Success', 'Your status has been set!');
     },
     onError: (error: any, variables, context) => {
       // Rollback optimistic update
@@ -498,7 +501,9 @@ function ActivityScreenContent() {
       queryClient.invalidateQueries({ queryKey: ['my-status'] });
       queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
       setShowStatusModal(false);
-      Alert.alert('Success', 'Your status has been cleared!');
+      // Reset status state after successful clear so user can set a new status
+      // Keep storeStatus temporarily for display, but allow modal to open
+      // The status will be fully cleared after refresh or when API confirms it's gone
     },
     onError: (error: any, variables, context) => {
       // Rollback optimistic update
@@ -1320,23 +1325,24 @@ function ActivityScreenContent() {
             (statusState === 'expired' || statusState === 'cleared') && styles.statusInputContainerDisabled
           ]}
           onPress={() => {
-            // Don't allow opening modal if status is expired or cleared
-            if (statusState === 'expired' || statusState === 'cleared') {
+            // Don't allow opening modal if status is expired
+            if (statusState === 'expired') {
               return;
             }
-            // Populate form with current status if it exists, otherwise reset
-            if (storeStatus) {
+            // Populate form with current status if it exists and is active, otherwise reset
+            if (storeStatus && statusState === 'active') {
               setMessage(storeStatus.message);
               setLocation(mapBackendToFrontendLocation(storeStatus.location));
               setEndTime(new Date(storeStatus.endTime));
             } else {
+              // Reset form for new status (or when status is cleared/expired)
               setMessage('');
               setLocation(null);
-              setEndTime(getDefaultEndTime());
+              setEndTime(null); // Require user to select time
             }
             setShowStatusModal(true);
           }}
-          disabled={statusState === 'expired' || statusState === 'cleared'}
+          disabled={statusState === 'expired'}
         >
           <View style={styles.statusInputWrapper}>
             {/* Avatar placeholder with status-aware styling */}
@@ -1650,7 +1656,7 @@ function ActivityScreenContent() {
                       } else {
                         setMessage('');
                         setLocation(null);
-                        setEndTime(getDefaultEndTime());
+                        setEndTime(null); // Require user to select time
                       }
                       setShowStatusModal(true);
                     }}
@@ -1801,16 +1807,16 @@ function ActivityScreenContent() {
 
             <View style={styles.timeContainer}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionLabel}>Clear After</Text>
+                <Text style={styles.sectionLabel}>I'm available until:</Text>
                 <Text style={styles.requiredIndicator}>Required</Text>
               </View>
-              <View style={styles.timePickerContainer}>
-                <Text style={styles.clearAfterButtonText}>
-                  Time
-                </Text>
+              <View style={[
+                styles.timePickerContainer,
+                !endTime && styles.timePickerContainerIncomplete
+              ]}>
                 {Platform.OS === 'ios' ? (
                   <DateTimePicker
-                    value={endTime || new Date()}
+                    value={endTime || getDefaultEndTime()}
                     mode="time"
                     display="default"
                     minuteInterval={15}
@@ -1818,14 +1824,16 @@ function ActivityScreenContent() {
                   />
                 ) : (
                   <DateTimePicker
-                    value={endTime || new Date()}
+                    value={endTime || getDefaultEndTime()}
                     mode="time"
                     minuteInterval={15}
                     onChange={handleTimeChange}
                   />
                 )}
               </View>
-              <Text style={styles.helperText}>When should your status automatically clear?</Text>
+              {!endTime && (
+                <Text style={styles.helperText}>Select when your status should clear</Text>
+              )}
             </View>
 
             {/* Clear Status Button */}
@@ -2302,6 +2310,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
     gap: 16,
+  },
+  timePickerContainerIncomplete: {
+    borderWidth: 1.5,
+    borderColor: '#ff9500',
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#fffbf5',
   },
   clearAfterButtonText: {
     fontSize: 16,
