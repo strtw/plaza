@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
+    "update-ip": "node scripts/update-local-ip.js",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
