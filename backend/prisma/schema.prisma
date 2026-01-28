@@ -22,8 +22,37 @@ model User {
   invitesUsed     Invite[] @relation("InviteUser")
   friends         Friend[] @relation("UserFriends")
   friendsAsFriend Friend[] @relation("FriendUser")
+  groupsOwned     Group[]
+  groupMemberships GroupMember[]
 
   @@index([phoneHash])
+}
+
+model Group {
+  id        String   @id @default(uuid())
+  name      String
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner   User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members GroupMember[]
+
+  @@index([ownerId])
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  groupId   String
+  userId    String
+  addedAt   DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
 }
 
 enum FriendStatus {

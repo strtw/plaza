@@ -9,6 +9,7 @@ import { InvitesModule } from './modules/invites/invites.module';
 import { UsersModule } from './modules/users/users.module';
 import { DevModule } from './modules/dev/dev.module';
 import { FriendsModule } from './modules/friends/friends.module';
+import { GroupsModule } from './modules/groups/groups.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { FriendsModule } from './modules/friends/friends.module';
     InvitesModule,
     UsersModule,
     FriendsModule,
+    GroupsModule,
     // DevModule - Only active in development, endpoints check NODE_ENV
     DevModule,
   ],

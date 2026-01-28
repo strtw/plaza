@@ -207,6 +207,25 @@ export const createApi = (getToken: () => Promise<string | null>) => {
       fetchApi('/users/me', {
         method: 'DELETE',
       }),
+    // Groups
+    getMyGroups: () => fetchApi('/groups'),
+    getGroup: (id: string) => fetchApi(`/groups/${id}`),
+    createGroup: (name: string) =>
+      fetchApi('/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+    addGroupMember: (groupId: string, userId: string) =>
+      fetchApi(`/groups/${groupId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      }),
+    removeGroupMember: (groupId: string, userId: string) =>
+      fetchApi(`/groups/${groupId}/members/${userId}`, {
+        method: 'DELETE',
+      }),
+    getGroupsForUser: (userId: string) =>
+      fetchApi(`/groups?memberId=${encodeURIComponent(userId)}`),
   };
 };
 
