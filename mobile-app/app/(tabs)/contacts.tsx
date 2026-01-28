@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFullName } from '../../lib/types';
 import { FindFriendsModal } from '../../components/FindFriendsModal';
+import { HamburgerMenu } from '../../components/HamburgerMenu';
 
 function HomeScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
@@ -171,6 +172,7 @@ function HomeScreenContent() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={[styles.headerContainer, { paddingTop: headerPaddingTop }]}>
+        <HamburgerMenu />
         <Text style={styles.headerTitle}>Contacts</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {(pendingFriends as any[]).length > 0 && (
@@ -402,9 +404,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   headerTitle: {
+    flex: 1,
     fontSize: 28,
     fontWeight: 'bold',
     color: '#000',
+    textAlign: 'center',
   },
   addButton: {
     padding: 4,

@@ -8,6 +8,7 @@ import { Redirect, useRouter } from 'expo-router';
 import { useAuth, useClerk } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HamburgerMenu } from '../../components/HamburgerMenu';
 
 function ProfileScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
@@ -88,6 +89,11 @@ function ProfileScreenContent() {
 
   return (
     <View style={styles.container}>
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
+        <HamburgerMenu />
+        <Text style={styles.headerTitle}>Profile</Text>
+        <View style={{ width: 44 }} />
+      </View>
       <View style={styles.content}>
         {/* Avatar */}
         <View style={styles.avatarContainer}>
@@ -211,6 +217,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#fff',
+    minHeight: 60,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000',
+    textAlign: 'center',
   },
   content: {
     flex: 1,

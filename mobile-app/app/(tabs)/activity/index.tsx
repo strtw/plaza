@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserStore } from '../../../stores/userStore';
+import { HamburgerMenu } from '../../../components/HamburgerMenu';
 
 // Animated wrapper component for new contact items (fade in with opacity pulse)
 const AnimatedContactListItem = ({ contact, previousStatus }: { contact: any; previousStatus?: any }) => {
@@ -1149,6 +1150,7 @@ function ActivityScreenContent() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={[styles.headerContainer, { paddingTop: headerPaddingTop }]}>
+        <HamburgerMenu />
         <Text style={styles.headerTitle}>Activity</Text>
         <Pressable
           onPress={() => {
@@ -1762,9 +1764,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   headerTitle: {
+    flex: 1,
     fontSize: 28,
     fontWeight: 'bold',
     color: '#000',
+    textAlign: 'center',
   },
   statusInputContainer: {
     paddingHorizontal: 16,
