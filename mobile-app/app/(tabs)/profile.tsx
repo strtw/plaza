@@ -2,7 +2,6 @@ import { View, Text, Pressable, StyleSheet, ActivityIndicator, Modal, TextInput,
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
-import { SignOutButton } from '../../components/SignOutButton';
 import { getFullName } from '../../lib/types';
 import { Redirect, useRouter } from 'expo-router';
 import { useAuth, useClerk } from '@clerk/clerk-expo';
@@ -106,9 +105,6 @@ function ProfileScreenContent() {
         <Text style={styles.nameText}>
           {currentUser ? getFullName(currentUser) : 'Loading...'}
         </Text>
-
-        {/* Sign Out Button */}
-        <SignOutButton />
       </View>
 
       {/* Delete Account Button - Fixed at bottom */}
