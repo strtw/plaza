@@ -5,17 +5,21 @@ import { useClerk } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const OVERLAY_CLOSE_MS = 150; // Gray overlay fades out in half the time (was ~300ms)
+
 export function HamburgerMenu() {
   const [menuVisible, setMenuVisible] = useState(false);
   const router = useRouter();
   const { signOut } = useClerk();
   const insets = useSafeAreaInsets();
   const slideAnim = React.useRef(new Animated.Value(-300)).current;
+  const overlayOpacity = React.useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (menuVisible) {
       // Reset and animate in when menu becomes visible
       slideAnim.setValue(-300);
+      overlayOpacity.setValue(1);
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -30,6 +34,12 @@ export function HamburgerMenu() {
   };
 
   const closeMenu = () => {
+    // Fade out gray overlay in half the time so background isn't gray as long
+    Animated.timing(overlayOpacity, {
+      toValue: 0,
+      duration: OVERLAY_CLOSE_MS,
+      useNativeDriver: true,
+    }).start();
     Animated.spring(slideAnim, {
       toValue: -300,
       useNativeDriver: true,
@@ -67,10 +77,9 @@ export function HamburgerMenu() {
         onRequestClose={closeMenu}
       >
         <View style={styles.overlayContainer}>
-          <Pressable 
-            style={styles.overlay} 
-            onPress={closeMenu}
-          />
+          <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]} pointerEvents="box-none">
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeMenu} />
+          </Animated.View>
           <Animated.View
             style={[
               styles.menuContainer,
@@ -101,7 +110,7 @@ export function HamburgerMenu() {
                 onPress={() => handleMenuItem(() => router.push('/(tabs)/contacts'))}
               >
                 <Ionicons name="contacts-outline" size={24} color="#000" />
-                <Text style={styles.menuItemText}>User Management</Text>
+                <Text style={styles.menuItemText}>Manage Users</Text>
               </Pressable>
 
               <View style={styles.menuDivider} />
