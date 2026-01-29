@@ -1,9 +1,10 @@
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useUserStore } from '../../../stores/userStore';
 import { FindFriendsModal } from '../../../components/FindFriendsModal';
 
 export default function AddFriendsScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const setLastAddFriendsCount = useUserStore((s) => s.setLastAddFriendsCount);
 
   const handleClose = (count?: number) => {
@@ -16,6 +17,7 @@ export default function AddFriendsScreen() {
       visible
       onClose={handleClose}
       asFullScreen
+      addToGroupMode={from === 'groups'}
     />
   );
 }

@@ -12,6 +12,8 @@ import {
   Alert,
   Linking,
   Animated,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
@@ -27,9 +29,11 @@ export type FindFriendsModalProps = {
   onClose: (count?: number) => void;
   /** When true, render as a full-screen View instead of Modal (e.g. when used as add-friends route). */
   asFullScreen?: boolean;
+  /** When true, show group name/description and "Add friends to your group"; require group name for Done; bypass match/set-status on Done. */
+  addToGroupMode?: boolean;
 };
 
-export function FindFriendsModal({ visible, onClose, asFullScreen = false }: FindFriendsModalProps) {
+export function FindFriendsModal({ visible, onClose, asFullScreen = false, addToGroupMode = false }: FindFriendsModalProps) {
   const { getToken } = useAuth();
   const router = useRouter();
   const api = createApi(getToken!);
@@ -46,6 +50,8 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false }: Fin
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [groupsLocked, setGroupsLocked] = useState(true);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [groupName, setGroupName] = useState('');
+  const [groupDescription, setGroupDescription] = useState('');
   const noteWiggle = useRef(new Animated.Value(0)).current;
   const tenSecondTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStartedWiggleTimer = useRef(false);
@@ -200,6 +206,10 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false }: Fin
   }, [visible]);
 
   const handleDone = async () => {
+    if (addToGroupMode) {
+      onClose();
+      return;
+    }
     const selected = deviceContacts.filter((c) => selectedContacts.has(c.phone));
     if (selected.length === 0) return;
     try {
@@ -347,14 +357,28 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false }: Fin
               </Pressable>
             )}
             <Pressable
-              style={[styles.doneButton, (selectedContacts.size < 2 || matchContactsMutation.isPending || checkContactsMutation.isPending) && styles.doneButtonDisabled]}
+              style={[
+                styles.doneButton,
+                (addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) || matchContactsMutation.isPending || checkContactsMutation.isPending
+                  ? styles.doneButtonDisabled
+                  : null,
+              ]}
               onPress={handleDone}
-              disabled={selectedContacts.size < 2 || matchContactsMutation.isPending || checkContactsMutation.isPending}
+              disabled={
+                (addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) ||
+                matchContactsMutation.isPending ||
+                checkContactsMutation.isPending
+              }
             >
               {matchContactsMutation.isPending || checkContactsMutation.isPending ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={[styles.doneButtonText, selectedContacts.size < 2 && styles.doneButtonTextDisabled]}>
+                <Text
+                  style={[
+                    styles.doneButtonText,
+                    (addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) && styles.doneButtonTextDisabled,
+                  ]}
+                >
                   Done
                 </Text>
               )}
@@ -362,10 +386,39 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false }: Fin
           </View>
         </View>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Add friends</Text>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View style={styles.modalContentInner}>
+          <Text style={styles.modalTitle}>{addToGroupMode ? 'Add friends to your group' : 'Add friends'}</Text>
           <Animated.Text style={[styles.modalNote, { transform: [{ rotate: noteRotation }] }]}>
-            A two friend minimum is required to set a status
+            {addToGroupMode
+              ? 'A two friend minimum is required for a group'
+              : 'A two friend minimum is required to set a status'}
           </Animated.Text>
+          {addToGroupMode && (
+            <View style={styles.groupFieldsContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Group name"
+                placeholderTextColor="#999"
+                value={groupName}
+                onChangeText={setGroupName}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+              <TextInput
+                style={[styles.searchInput, styles.groupDescriptionInput]}
+                placeholder="Description (optional)"
+                placeholderTextColor="#999"
+                value={groupDescription}
+                onChangeText={setGroupDescription}
+                autoCapitalize="sentences"
+                returnKeyType="done"
+                blurOnSubmit
+              />
+            </View>
+          )}
+
+          {addToGroupMode && <View style={styles.groupFieldsDivider} />}
 
           {!isLoadingContacts && deviceContacts.length > 0 && (
             <View style={styles.searchContainer}>
@@ -400,7 +453,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false }: Fin
             </View>
           )}
 
-          {!isLoadingContacts && deviceContacts.length > 0 && (
+          {!isLoadingContacts && deviceContacts.length > 0 && !addToGroupMode && (
             <View style={styles.groupsSection}>
               <View style={styles.sectionHeader}>
                 <View style={styles.groupsSectionHeaderRow}>
@@ -500,6 +553,8 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false }: Fin
               }
             />
           )}
+            </View>
+          </TouchableWithoutFeedback>
         </View>
       </View>
   );
@@ -527,11 +582,15 @@ const styles = StyleSheet.create({
   doneButtonText: { fontSize: 16, color: '#fff', fontWeight: '600' },
   doneButtonTextDisabled: { color: '#999' },
   modalContent: { flex: 1, padding: 20 },
+  modalContentInner: { flex: 1 },
   modalTitle: { fontSize: 28, fontWeight: 'bold', marginBottom: 8 },
   modalNote: { fontSize: 14, color: '#666', marginBottom: 16 },
   modalSubtitle: { fontSize: 16, color: '#666', marginBottom: 20 },
   searchContainer: { marginBottom: 16 },
   searchInput: { backgroundColor: '#f5f5f5', borderRadius: 8, padding: 12, fontSize: 16, color: '#000', borderWidth: 1, borderColor: '#e0e0e0' },
+  groupFieldsContainer: { marginBottom: 16 },
+  groupDescriptionInput: { marginTop: 12 },
+  groupFieldsDivider: { height: 1, backgroundColor: '#e0e0e0', marginVertical: 16 },
   groupsSection: { marginBottom: 16 },
   groupsSectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   groupsLockButton: {

@@ -31,6 +31,15 @@ export default function GroupsScreen() {
         <View style={{ width: 44 }} />
       </View>
       <ScrollView style={styles.content}>
+        <Pressable
+          style={styles.newGroupButton}
+          onPress={() => router.push('/(tabs)/activity/add-friends?from=groups')}
+        >
+          <View style={styles.newGroupAvatar}>
+            <Ionicons name="add" size={28} color="#007AFF" />
+          </View>
+          <Text style={styles.newGroupLabel}>New group</Text>
+        </Pressable>
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#007AFF" />
@@ -88,6 +97,30 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  newGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingRight: 16,
+    marginBottom: 8,
+  },
+  newGroupAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  newGroupLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   loadingContainer: {
     flex: 1,
