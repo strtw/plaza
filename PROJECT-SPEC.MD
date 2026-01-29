@@ -91,7 +91,7 @@ Production-ready mobile application (iOS & Android) with geolocation, user statu
 ### Authentication Provider
 - **Clerk** - modern auth platform (worth every penny)
   - Social login, email/password, magic links out of the box
-  - User management dashboard (saves building admin panel)
+  - Manage Users dashboard (saves building admin panel)
   - Excellent React Native SDK
   - JWT-based, secure by default
   - **Saves 2-4 weeks** of auth development
@@ -361,7 +361,7 @@ npm run start:dev
 ❌ **Don't** write tests for everything - test critical paths only
 ❌ **Don't** use GraphQL yet - REST is simpler, add GraphQL if you need it
 ❌ **Don't** containerize everything - Railway handles deployment
-❌ **Don't** build an admin dashboard - Clerk has user management built-in
+❌ **Don't** build an admin dashboard - Clerk has Manage Users built-in
 
 ✅ **Do** ship features
 ✅ **Do** talk to users
@@ -625,12 +625,12 @@ npm run start:dev
 
 **What:**
 - Admin web interface
-- User management beyond Clerk
+- Manage Users beyond Clerk
 - Analytics dashboards
 - Support tools
 
 **Why not now:**
-- Clerk has user management built-in
+- Clerk has Manage Users built-in
 - Railway has database dashboard
 - You can use Prisma Studio for database queries
 

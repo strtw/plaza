@@ -67,7 +67,7 @@ backend/src/
 └── modules/                    # Feature modules
     ├── users/
     │   ├── users.module.ts
-    │   └── users.service.ts   # User management
+    │   └── users.service.ts   # Manage Users
     │
     ├── contacts/
     │   ├── contacts.module.ts
@@ -92,7 +92,7 @@ backend/src/
 ### Module Architecture
 
 #### 1. Users Module
-**Purpose**: User management and Clerk integration
+**Purpose**: Manage Users and Clerk integration
 
 - **Service**: `UsersService`
   - `findOrCreateByClerkId()` - Creates or retrieves user by Clerk ID
