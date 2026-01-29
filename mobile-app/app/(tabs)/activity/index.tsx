@@ -1682,13 +1682,13 @@ function ActivityScreenContent() {
             {/* Divider */}
             <View style={styles.filterDivider} />
 
-            {/* Muted Friends Toggle */}
+            {/* Muted Friends Toggle: ON = hide muted (default), OFF = show muted */}
             <View style={styles.filterSection}>
               <View style={[styles.filterRow, styles.filterRowNoBorder]}>
-                <Text style={styles.filterLabel}>Show updates from muted friends</Text>
+                <Text style={styles.filterLabel}>Hide updates from muted friends</Text>
                 <Switch
-                  value={tempShowMuted}
-                  onValueChange={setTempShowMuted}
+                  value={!tempShowMuted}
+                  onValueChange={(hideMuted) => setTempShowMuted(!hideMuted)}
                   trackColor={{ false: '#E5E5E5', true: '#007AFF' }}
                   thumbColor="#fff"
                 />
@@ -1698,7 +1698,7 @@ function ActivityScreenContent() {
           <View style={styles.modalFooter}>
             <Pressable
               onPress={() => {
-                // Clear all filters (reset to defaults: all locations, any duration, no muted)
+                // Clear all filters (reset to defaults: all locations, any duration, hide muted)
                 setTempShowMuted(false);
                 setTempSelectedLocations(new Set([StatusLocation.HOME, StatusLocation.GREENSPACE, StatusLocation.THIRD_PLACE]));
                 setTempMinDurationMinutes(0);
