@@ -17,15 +17,29 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  statuses        Status[]
-  invitesCreated  Invite[] @relation("InviteCreator")
-  invitesUsed     Invite[] @relation("InviteUser")
-  friends         Friend[] @relation("UserFriends")
-  friendsAsFriend Friend[] @relation("FriendUser")
-  groupsOwned     Group[]
+  statuses         Status[]
+  invitesCreated   Invite[] @relation("InviteCreator")
+  invitesUsed      Invite[] @relation("InviteUser")
+  friends          Friend[] @relation("UserFriends")
+  friendsAsFriend  Friend[] @relation("FriendUser")
+  groupsOwned      Group[]
   groupMemberships GroupMember[]
+  preferences      UserPreferences?
 
   @@index([phoneHash])
+}
+
+model UserPreferences {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  showMuted          Boolean  @default(false)
+  selectedLocations  String[] @default(["HOME", "GREENSPACE", "THIRD_PLACE"])
+  minDurationMinutes Int      @default(0)
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Group {

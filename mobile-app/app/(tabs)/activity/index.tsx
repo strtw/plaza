@@ -327,6 +327,37 @@ function ActivityScreenContent() {
   const [minDurationMinutes, setMinDurationMinutes] = useState<number>(0);
   const [tempMinDurationMinutes, setTempMinDurationMinutes] = useState<number>(0);
 
+  // Persisted filter preferences (loaded from backend on mount)
+  const { data: preferences } = useQuery({
+    queryKey: ['user-preferences'],
+    queryFn: api.getPreferences,
+    enabled: isLoaded && isSignedIn,
+  });
+  const hasInitializedFromPreferences = useRef(false);
+  useEffect(() => {
+    if (!preferences || hasInitializedFromPreferences.current) return;
+    const validLocations = [StatusLocation.HOME, StatusLocation.GREENSPACE, StatusLocation.THIRD_PLACE];
+    const locations = (preferences.selectedLocations || []).filter((l: string) =>
+      validLocations.includes(l as StatusLocation)
+    );
+    setShowMuted(preferences.showMuted ?? false);
+    setSelectedLocations(locations.length > 0 ? new Set(locations as StatusLocation[]) : new Set(validLocations));
+    setMinDurationMinutes(Math.max(0, preferences.minDurationMinutes ?? 0));
+    hasInitializedFromPreferences.current = true;
+  }, [preferences]);
+
+  const updatePreferencesMutation = useMutation({
+    mutationFn: (data: { showMuted: boolean; selectedLocations: string[]; minDurationMinutes: number }) =>
+      api.updatePreferences(data),
+    onSuccess: (data) => {
+      setShowMuted(data.showMuted);
+      setSelectedLocations(new Set((data.selectedLocations || []) as StatusLocation[]));
+      setMinDurationMinutes(data.minDurationMinutes ?? 0);
+      queryClient.setQueryData(['user-preferences'], data);
+      setShowFiltersModal(false);
+    },
+  });
+
   // Always fetch all statuses (accepted + muted) - filtering is frontend-only
   const { data: statuses, refetch: refetchStatuses } = useQuery({
     queryKey: ['friends-statuses'], // Remove showMuted from query key to prevent refetches on filter toggle
@@ -1718,14 +1749,18 @@ function ActivityScreenContent() {
             </Pressable>
             <Pressable
               onPress={() => {
-                setShowMuted(tempShowMuted);
-                setSelectedLocations(new Set(tempSelectedLocations));
-                setMinDurationMinutes(tempMinDurationMinutes);
-                setShowFiltersModal(false);
+                updatePreferencesMutation.mutate({
+                  showMuted: tempShowMuted,
+                  selectedLocations: Array.from(tempSelectedLocations),
+                  minDurationMinutes: tempMinDurationMinutes,
+                });
               }}
               style={styles.applyButton}
+              disabled={updatePreferencesMutation.isPending}
             >
-              <Text style={styles.applyButtonText}>Apply</Text>
+              <Text style={styles.applyButtonText}>
+                {updatePreferencesMutation.isPending ? 'Saving…' : 'Apply'}
+              </Text>
             </Pressable>
           </View>
         </View>

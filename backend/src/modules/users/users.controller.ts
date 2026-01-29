@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Delete, UseGuards, Request, Body, Query, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, UseGuards, Request, Body, Query, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { clerkClient } from '@clerk/clerk-sdk-node';
 import { PrismaClient } from '@prisma/client';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
 const prisma = new PrismaClient();
 
@@ -88,6 +89,38 @@ export class UsersController {
       lastName: user.lastName,
       email: user.email,
     };
+  }
+
+  /**
+   * Get current user's activity filter preferences
+   */
+  @Get('me/preferences')
+  async getPreferences(@Request() req) {
+    const clerkId = req.userId;
+    const user = await prisma.user.findUnique({
+      where: { clerkId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+    return this.usersService.getPreferences(user.id);
+  }
+
+  /**
+   * Update current user's activity filter preferences
+   */
+  @Patch('me/preferences')
+  async updatePreferences(@Request() req, @Body() dto: UpdatePreferencesDto) {
+    const clerkId = req.userId;
+    const user = await prisma.user.findUnique({
+      where: { clerkId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+    return this.usersService.updatePreferences(user.id, dto);
   }
 
   /**

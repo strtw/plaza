@@ -204,6 +204,12 @@ export const createApi = (getToken: () => Promise<string | null>) => {
       }),
     searchUsers: (query: string) =>
       fetchApi(`/users/search?q=${encodeURIComponent(query)}`),
+    getPreferences: () => fetchApi('/users/me/preferences'),
+    updatePreferences: (data: { showMuted?: boolean; selectedLocations?: string[]; minDurationMinutes?: number }) =>
+      fetchApi('/users/me/preferences', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
     deleteAccount: () =>
       fetchApi('/users/me', {
         method: 'DELETE',

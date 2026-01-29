@@ -110,6 +110,61 @@ export class UsersService {
   }
 
   /**
+   * Get activity filter preferences for a user (creates defaults if none exist)
+   */
+  async getPreferences(userId: string) {
+    const prefs = await prisma.userPreferences.findUnique({
+      where: { userId },
+    });
+    if (prefs) {
+      return {
+        showMuted: prefs.showMuted,
+        selectedLocations: prefs.selectedLocations,
+        minDurationMinutes: prefs.minDurationMinutes,
+      };
+    }
+    return {
+      showMuted: false,
+      selectedLocations: ['HOME', 'GREENSPACE', 'THIRD_PLACE'],
+      minDurationMinutes: 0,
+    };
+  }
+
+  /**
+   * Update activity filter preferences for a user
+   */
+  async updatePreferences(
+    userId: string,
+    data: { showMuted?: boolean; selectedLocations?: string[]; minDurationMinutes?: number },
+  ) {
+    const validLocations = ['HOME', 'GREENSPACE', 'THIRD_PLACE'];
+    const selectedLocations =
+      data.selectedLocations?.filter((l) => validLocations.includes(l)) ?? undefined;
+    const minDurationMinutes =
+      data.minDurationMinutes !== undefined ? Math.max(0, data.minDurationMinutes) : undefined;
+
+    const prefs = await prisma.userPreferences.upsert({
+      where: { userId },
+      update: {
+        ...(data.showMuted !== undefined && { showMuted: data.showMuted }),
+        ...(selectedLocations !== undefined && { selectedLocations }),
+        ...(minDurationMinutes !== undefined && { minDurationMinutes }),
+      },
+      create: {
+        userId,
+        showMuted: data.showMuted ?? false,
+        selectedLocations: selectedLocations ?? ['HOME', 'GREENSPACE', 'THIRD_PLACE'],
+        minDurationMinutes: minDurationMinutes ?? 0,
+      },
+    });
+    return {
+      showMuted: prefs.showMuted,
+      selectedLocations: prefs.selectedLocations,
+      minDurationMinutes: prefs.minDurationMinutes,
+    };
+  }
+
+  /**
    * Search users by name or email
    * Excludes users who have blocked the current user
    */
