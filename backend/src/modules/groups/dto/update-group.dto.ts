@@ -1,8 +1,9 @@
 import { IsString, IsOptional } from 'class-validator';
 
-export class CreateGroupDto {
+export class UpdateGroupDto {
+  @IsOptional()
   @IsString()
-  name: string;
+  name?: string;
 
   @IsOptional()
   @IsString()

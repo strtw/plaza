@@ -211,10 +211,15 @@ export const createApi = (getToken: () => Promise<string | null>) => {
     // Groups
     getMyGroups: () => fetchApi('/groups'),
     getGroup: (id: string) => fetchApi(`/groups/${id}`),
-    createGroup: (name: string) =>
+    updateGroup: (id: string, data: { name?: string; description?: string }) =>
+      fetchApi(`/groups/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    createGroup: (name: string, description?: string) =>
       fetchApi('/groups', {
         method: 'POST',
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, ...(description != null && { description }) }),
       }),
     addGroupMember: (groupId: string, userId: string) =>
       fetchApi(`/groups/${groupId}/members`, {

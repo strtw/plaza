@@ -14,6 +14,7 @@ export class GroupsService {
     return groups.map((g) => ({
       id: g.id,
       name: g.name,
+      description: g.description ?? undefined,
       ownerId: g.ownerId,
       createdAt: g.createdAt,
       updatedAt: g.updatedAt,
@@ -45,6 +46,7 @@ export class GroupsService {
     return {
       id: group.id,
       name: group.name,
+      description: group.description ?? undefined,
       ownerId: group.ownerId,
       createdAt: group.createdAt,
       updatedAt: group.updatedAt,
@@ -58,9 +60,25 @@ export class GroupsService {
     };
   }
 
-  async createGroup(ownerId: string, name: string) {
+  async createGroup(ownerId: string, name: string, description?: string) {
     return prisma.group.create({
-      data: { name, ownerId },
+      data: { name, ownerId, ...(description != null && { description }) },
+    });
+  }
+
+  async updateGroup(ownerId: string, groupId: string, dto: { name?: string; description?: string }) {
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+    });
+    if (!group || group.ownerId !== ownerId) {
+      throw new NotFoundException('Group not found');
+    }
+    return prisma.group.update({
+      where: { id: groupId },
+      data: {
+        ...(dto.name != null && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description || null }),
+      },
     });
   }
 

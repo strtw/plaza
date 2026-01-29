@@ -52,6 +52,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const noteWiggle = useRef(new Animated.Value(0)).current;
   const tenSecondTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStartedWiggleTimer = useRef(false);
@@ -207,7 +208,29 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
 
   const handleDone = async () => {
     if (addToGroupMode) {
-      onClose();
+      const name = groupName.trim();
+      if (!name) return;
+      setIsCreatingGroup(true);
+      try {
+        const group = await api.createGroup(name, groupDescription.trim() || undefined);
+        const selected = deviceContacts.filter((c) => selectedContacts.has(c.phone));
+        for (const contact of selected) {
+          const userId = plazaUserIdByPhone[contact.phone];
+          if (userId) {
+            try {
+              await api.addGroupMember(group.id, userId);
+            } catch {
+              // Skip if already member or other per-member error
+            }
+          }
+        }
+        await queryClient.invalidateQueries({ queryKey: ['my-groups'] });
+        onClose();
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'Failed to create group. Please try again.');
+      } finally {
+        setIsCreatingGroup(false);
+      }
       return;
     }
     const selected = deviceContacts.filter((c) => selectedContacts.has(c.phone));
@@ -359,7 +382,10 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
             <Pressable
               style={[
                 styles.doneButton,
-                (addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) || matchContactsMutation.isPending || checkContactsMutation.isPending
+                (addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) ||
+                  matchContactsMutation.isPending ||
+                  checkContactsMutation.isPending ||
+                  isCreatingGroup
                   ? styles.doneButtonDisabled
                   : null,
               ]}
@@ -367,10 +393,11 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
               disabled={
                 (addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) ||
                 matchContactsMutation.isPending ||
-                checkContactsMutation.isPending
+                checkContactsMutation.isPending ||
+                isCreatingGroup
               }
             >
-              {matchContactsMutation.isPending || checkContactsMutation.isPending ? (
+              {matchContactsMutation.isPending || checkContactsMutation.isPending || isCreatingGroup ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text

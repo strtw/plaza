@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Body,
@@ -14,6 +15,7 @@ import {
 import { GroupsService } from './groups.service';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { CreateGroupDto } from './dto/create-group.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { PrismaClient } from '@prisma/client';
 
@@ -56,7 +58,7 @@ export class GroupsController {
   async createGroup(@Request() req, @Body() dto: CreateGroupDto) {
     try {
       const ownerId = await this.getPlazaUserId(req);
-      return this.groupsService.createGroup(ownerId, dto.name);
+      return this.groupsService.createGroup(ownerId, dto.name, dto.description);
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
@@ -71,6 +73,21 @@ export class GroupsController {
     try {
       const ownerId = await this.getPlazaUserId(req);
       return this.groupsService.getGroup(ownerId, groupId);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      if (error?.status === 404) throw error;
+      throw new HttpException(
+        error?.message || 'Internal server error',
+        error?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Patch(':id')
+  async updateGroup(@Request() req, @Param('id') groupId: string, @Body() dto: UpdateGroupDto) {
+    try {
+      const ownerId = await this.getPlazaUserId(req);
+      return this.groupsService.updateGroup(ownerId, groupId, dto);
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       if (error?.status === 404) throw error;
