@@ -1685,7 +1685,16 @@ function ActivityScreenContent() {
             {/* Muted Friends Toggle: ON = hide muted (default), OFF = show muted */}
             <View style={styles.filterSection}>
               <View style={[styles.filterRow, styles.filterRowNoBorder]}>
-                <Text style={styles.filterLabel}>Hide updates from muted friends</Text>
+                <View style={styles.filterLabelBlock}>
+                  <Text style={styles.filterLabel}>
+                    Hide updates from muted friends
+                  </Text>
+                  <Text style={styles.filterSubtext}>
+                    {tempShowMuted
+                      ? "You are seeing updates from friends you've muted"
+                      : "You won't see updates from friends you've muted"}
+                  </Text>
+                </View>
                 <Switch
                   value={!tempShowMuted}
                   onValueChange={(hideMuted) => setTempShowMuted(!hideMuted)}
@@ -2158,10 +2167,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0e0e0',
     marginVertical: 20,
   },
+  filterLabelBlock: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    marginRight: 12,
+  },
   filterLabel: {
     fontSize: 16,
     color: '#000',
     fontWeight: '500',
+  },
+  filterSubtext: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 4,
   },
   modalFooter: {
     padding: 20,
