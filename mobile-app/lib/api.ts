@@ -88,7 +88,8 @@ export const createApi = (getToken: () => Promise<string | null>) => {
       response = await tryFetch(url);
     } catch (fetchError: any) {
       // If using local URL and it fails, try Railway as fallback
-      if (isLocalUrl && baseUrl !== RAILWAY_URL) {
+      // Railway fallback disabled — use only configured API URL (local backend)
+      if (false) {
         console.log(`[API] Local backend unavailable, falling back to Railway...`);
         try {
           const fallbackUrl = `${RAILWAY_URL}${endpoint}`;

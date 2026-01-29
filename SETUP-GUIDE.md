@@ -242,3 +242,23 @@ After setting up accounts:
 
 You're ready to develop! 🚀
 
+---
+
+## Full dev startup (one command)
+
+From the project root you can start everything with one script:
+
+```bash
+./scripts/start-dev.sh
+```
+
+This script:
+
+1. **Starts PostgreSQL** (Docker) and waits until it’s ready
+2. **Frees port 3000** (kills any process already using it)
+3. **Starts the backend** in the background (`backend` on port 3000)
+4. **Updates the mobile-app API URL** to your machine’s local IP (for testing on a physical device)
+5. **Opens a new Terminal window** and starts Expo there so you can see the QR code
+
+**Requirements**: Docker running, Node 20+ for Expo (e.g. `nvm use` in `mobile-app`), and `backend`/`mobile-app` dependencies installed. Backend keeps running in the background after the script exits; stop it by killing the `nest start` process or closing the terminal that ran the script.
+
