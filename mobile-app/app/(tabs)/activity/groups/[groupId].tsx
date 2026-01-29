@@ -29,6 +29,9 @@ export default function GroupEditScreen() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [isMemberEditMode, setIsMemberEditMode] = useState(false);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
+  const [pendingRemovalIds, setPendingRemovalIds] = useState<Set<string>>(new Set());
 
   const { data: group, isLoading, error } = useQuery({
     queryKey: ['group', groupId],
@@ -49,6 +52,25 @@ export default function GroupEditScreen() {
     },
   });
 
+  const removeMembersMutation = useMutation({
+    mutationFn: async (userIds: string[]) => {
+      for (const userId of userIds) {
+        await api.removeGroupMember(groupId!, userId);
+      }
+    },
+    onSuccess: (_, userIds) => {
+      queryClient.invalidateQueries({ queryKey: ['group', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['my-groups'] });
+      setPendingRemovalIds(new Set());
+      setIsMemberEditMode(false);
+      setSelectedMemberIds(new Set());
+      Alert.alert('Done', `${userIds.length} member(s) removed from the group.`);
+    },
+    onError: (err: Error) => {
+      Alert.alert('Error', err.message || 'Failed to remove members');
+    },
+  });
+
   useEffect(() => {
     if (group) {
       setName(group.name);
@@ -59,12 +81,44 @@ export default function GroupEditScreen() {
   const hasChanges =
     name.trim() !== (group?.name ?? '') ||
     (description ?? '') !== (group?.description ?? '');
-  const canSave = hasChanges && name.trim().length > 0 && !updateGroupMutation.isPending;
+  const hasPendingRemovals = pendingRemovalIds.size > 0;
+  const canSave =
+    ((hasChanges && name.trim().length > 0) || hasPendingRemovals) &&
+    !updateGroupMutation.isPending &&
+    !removeMembersMutation.isPending;
 
   const handleSave = useCallback(() => {
     if (!canSave) return;
-    updateGroupMutation.mutate({ name: name.trim(), description: description.trim() });
-  }, [canSave, name, description, updateGroupMutation]);
+    if (hasChanges && name.trim().length > 0) {
+      updateGroupMutation.mutate(
+        { name: name.trim(), description: description.trim() },
+        {
+          onSuccess: () => {
+            if (pendingRemovalIds.size > 0) {
+              removeMembersMutation.mutate(Array.from(pendingRemovalIds));
+            }
+          },
+        }
+      );
+    } else if (pendingRemovalIds.size > 0) {
+      removeMembersMutation.mutate(Array.from(pendingRemovalIds));
+    }
+  }, [canSave, hasChanges, name, description, pendingRemovalIds, updateGroupMutation, removeMembersMutation]);
+
+  const handleStageRemovals = useCallback(() => {
+    if (selectedMemberIds.size === 0) return;
+    setPendingRemovalIds((prev) => new Set([...prev, ...selectedMemberIds]));
+    setSelectedMemberIds(new Set());
+  }, [selectedMemberIds]);
+
+  const toggleMemberSelection = useCallback((userId: string) => {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }, []);
 
   if (!isLoaded || !isSignedIn || !groupId) {
     return null;
@@ -177,11 +231,65 @@ export default function GroupEditScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Members ({group?.members?.length ?? 0})</Text>
-            {group?.members?.length ? (
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionLabel}>
+                Members ({Math.max(0, (group?.members?.length ?? 0) - pendingRemovalIds.size)})
+              </Text>
+              <View style={styles.memberActionsRow}>
+                <Pressable
+                  style={styles.editGroupButton}
+                  onPress={() => {
+                    if (isMemberEditMode) {
+                      setIsMemberEditMode(false);
+                      setSelectedMemberIds(new Set());
+                      setPendingRemovalIds(new Set());
+                    } else {
+                      setIsMemberEditMode(true);
+                      setSelectedMemberIds(new Set());
+                    }
+                  }}
+                >
+                  <Ionicons name={isMemberEditMode ? 'close-circle-outline' : 'create-outline'} size={18} color="#007AFF" />
+                  <Text style={styles.editGroupButtonText}>{isMemberEditMode ? 'Cancel' : 'Edit group'}</Text>
+                </Pressable>
+                {isMemberEditMode && (
+                  <Pressable
+                    style={[styles.trashButton, selectedMemberIds.size === 0 && styles.trashButtonDisabled]}
+                    onPress={handleStageRemovals}
+                    disabled={selectedMemberIds.size === 0}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={20}
+                      color="#fff"
+                    />
+                  </Pressable>
+                )}
+                {!isMemberEditMode && (
+                  <Pressable
+                    style={styles.addFriendButton}
+                    onPress={() => router.push(`/(tabs)/activity/add-friends?from=groups&groupId=${encodeURIComponent(groupId!)}`)}
+                  >
+                    <Ionicons name="person-add-outline" size={18} color="#fff" />
+                    <Text style={styles.addFriendButtonText}>Add friend</Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+            {(group?.members?.length ?? 0) > 0 ? (
               <View style={styles.memberList}>
-                {group.members.map((member: any) => (
-                  <View key={member.id} style={styles.memberRow}>
+                {(group?.members ?? []).filter((m: any) => !pendingRemovalIds.has(m.id)).map((member: any) => (
+                  <Pressable
+                    key={member.id}
+                    style={styles.memberRow}
+                    onPress={isMemberEditMode ? () => toggleMemberSelection(member.id) : undefined}
+                    disabled={!isMemberEditMode}
+                  >
+                    {isMemberEditMode && (
+                      <View style={[styles.memberCheckbox, selectedMemberIds.has(member.id) && styles.memberCheckboxChecked]}>
+                        {selectedMemberIds.has(member.id) && <View style={styles.memberCheckboxInner} />}
+                      </View>
+                    )}
                     <View style={styles.memberAvatar}>
                       <Text style={styles.memberInitial}>
                         {(member.firstName?.[0] || member.lastName?.[0] || '?').toUpperCase()}
@@ -195,7 +303,7 @@ export default function GroupEditScreen() {
                         <Text style={styles.memberEmail}>{member.email}</Text>
                       ) : null}
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             ) : (
@@ -306,11 +414,57 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 24,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   sectionLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: '#666',
-    marginBottom: 8,
+  },
+  memberActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  trashButton: {
+    padding: 8,
+    paddingHorizontal: 14,
+    marginRight: 4,
+    backgroundColor: '#ff0000',
+    borderRadius: 8,
+  },
+  trashButtonDisabled: {
+    opacity: 0.5,
+  },
+  addFriendButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+  },
+  addFriendButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  editGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  editGroupButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   descriptionText: {
     fontSize: 16,
@@ -338,6 +492,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#eee',
+  },
+  memberCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberCheckboxChecked: {
+    backgroundColor: '#007AFF',
+  },
+  memberCheckboxInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: '#fff',
   },
   memberAvatar: {
     width: 40,

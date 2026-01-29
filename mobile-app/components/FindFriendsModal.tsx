@@ -31,9 +31,11 @@ export type FindFriendsModalProps = {
   asFullScreen?: boolean;
   /** When true, show group name/description and "Add friends to your group"; require group name for Done; bypass match/set-status on Done. */
   addToGroupMode?: boolean;
+  /** When set, we're adding members to an existing group: hide name/description; Done adds selected members to this group and closes. */
+  existingGroupId?: string;
 };
 
-export function FindFriendsModal({ visible, onClose, asFullScreen = false, addToGroupMode = false }: FindFriendsModalProps) {
+export function FindFriendsModal({ visible, onClose, asFullScreen = false, addToGroupMode = false, existingGroupId }: FindFriendsModalProps) {
   const { getToken } = useAuth();
   const router = useRouter();
   const api = createApi(getToken!);
@@ -207,6 +209,30 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
   }, [visible]);
 
   const handleDone = async () => {
+    if (existingGroupId) {
+      setIsCreatingGroup(true);
+      try {
+        const selected = deviceContacts.filter((c) => selectedContacts.has(c.phone));
+        for (const contact of selected) {
+          const userId = plazaUserIdByPhone[contact.phone];
+          if (userId) {
+            try {
+              await api.addGroupMember(existingGroupId, userId);
+            } catch {
+              // Skip if already member or other per-member error
+            }
+          }
+        }
+        await queryClient.invalidateQueries({ queryKey: ['group', existingGroupId] });
+        await queryClient.invalidateQueries({ queryKey: ['my-groups'] });
+        onClose();
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'Failed to add members. Please try again.');
+      } finally {
+        setIsCreatingGroup(false);
+      }
+      return;
+    }
     if (addToGroupMode) {
       const name = groupName.trim();
       if (!name) return;
@@ -382,7 +408,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
             <Pressable
               style={[
                 styles.doneButton,
-                (addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) ||
+                (existingGroupId ? false : addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) ||
                   matchContactsMutation.isPending ||
                   checkContactsMutation.isPending ||
                   isCreatingGroup
@@ -391,7 +417,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
               ]}
               onPress={handleDone}
               disabled={
-                (addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) ||
+                (existingGroupId ? false : addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) ||
                 matchContactsMutation.isPending ||
                 checkContactsMutation.isPending ||
                 isCreatingGroup
@@ -403,7 +429,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
                 <Text
                   style={[
                     styles.doneButtonText,
-                    (addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) && styles.doneButtonTextDisabled,
+                    (existingGroupId ? false : addToGroupMode ? !groupName.trim() : selectedContacts.size < 2) && styles.doneButtonTextDisabled,
                   ]}
                 >
                   Done
@@ -415,13 +441,17 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
         <View style={styles.modalContent}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <View style={styles.modalContentInner}>
-          <Text style={styles.modalTitle}>{addToGroupMode ? 'Add friends to your group' : 'Add friends'}</Text>
+          <Text style={styles.modalTitle}>
+            {existingGroupId ? 'Add friends to this group' : addToGroupMode ? 'Add friends to your group' : 'Add friends'}
+          </Text>
           <Animated.Text style={[styles.modalNote, { transform: [{ rotate: noteRotation }] }]}>
-            {addToGroupMode
-              ? 'A two friend minimum is required for a group'
-              : 'A two friend minimum is required to set a status'}
+            {existingGroupId
+              ? 'Select contacts to add to the group'
+              : addToGroupMode
+                ? 'A two friend minimum is required for a group'
+                : 'A two friend minimum is required to set a status'}
           </Animated.Text>
-          {addToGroupMode && (
+          {addToGroupMode && !existingGroupId && (
             <View style={styles.groupFieldsContainer}>
               <TextInput
                 style={styles.searchInput}
@@ -445,7 +475,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
             </View>
           )}
 
-          {addToGroupMode && <View style={styles.groupFieldsDivider} />}
+          {addToGroupMode && !existingGroupId && <View style={styles.groupFieldsDivider} />}
 
           {!isLoadingContacts && deviceContacts.length > 0 && (
             <View style={styles.searchContainer}>
