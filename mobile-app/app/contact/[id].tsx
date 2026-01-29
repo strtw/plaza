@@ -7,35 +7,41 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFullName } from '../../lib/types';
 
 export default function ContactDetailScreen() {
-  const { id, isUpdated, previousStatus, from } = useLocalSearchParams<{ id?: string; isUpdated?: string; previousStatus?: string; from?: string }>();
+  const { id, isUpdated, previousStatus, from, groupId, firstName, lastName, name } = useLocalSearchParams<{
+    id?: string; isUpdated?: string; previousStatus?: string; from?: string; groupId?: string;
+    firstName?: string; lastName?: string; name?: string;
+  }>();
   const api = useApi();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
+
+  // Display name from route params (e.g. when opened from group with no Friend record)
+  const paramDisplayName = [firstName, lastName].filter(Boolean).join(' ') || (name ?? '') || null;
+
   // Parse previous status if provided (for updated status comparison)
-  const parsedPreviousStatus = previousStatus 
+  const parsedPreviousStatus = previousStatus
     ? JSON.parse(decodeURIComponent(previousStatus as string))
     : null;
   const showUpdatedComparison = isUpdated === 'true' && parsedPreviousStatus;
 
   // Get initials for avatar (reused from ContactListItem pattern)
-  const getInitials = (contact: any) => {
-    const fullName = getFullName(contact);
-    const parts = fullName.trim().split(/\s+/);
+  const getInitials = (contactOrName: any) => {
+    const fullName = typeof contactOrName === 'string' ? contactOrName : getFullName(contactOrName);
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
-    return fullName.substring(0, 2).toUpperCase();
+    return fullName ? fullName.substring(0, 2).toUpperCase() : '?';
   };
 
   // Get avatar background color based on name (reused from ContactListItem pattern)
-  const getAvatarColor = (contact: any) => {
-    const fullName = getFullName(contact);
+  const getAvatarColor = (contactOrName: any) => {
+    const fullName = typeof contactOrName === 'string' ? contactOrName : getFullName(contactOrName);
     const colors = [
       '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
       '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52BE80'
     ];
-    const index = fullName.charCodeAt(0) % colors.length;
+    const index = (fullName || '?').charCodeAt(0) % colors.length;
     return colors[index];
   };
 
@@ -49,8 +55,46 @@ export default function ContactDetailScreen() {
     queryFn: api.getFriendsStatuses,
   });
 
-  const contact = contacts?.find((c: any) => c.id === id);
+  const contact = id ? contacts?.find((c: any) => c.id === id) : null;
   const status = statuses?.find((s: any) => s.user?.id === id || s.userId === id);
+
+  const handleBack = () => {
+    if (from === 'group' && groupId) {
+      router.replace(`/(tabs)/activity/groups/${groupId}`);
+    } else if (from === 'add-friends') {
+      router.replace('/(tabs)/activity/add-friends');
+    } else {
+      router.replace('/(tabs)/activity');
+    }
+  };
+
+  // Presentational view when no Friend record but we have display params (e.g. from group)
+  if (!contact && paramDisplayName) {
+    const displayName = paramDisplayName;
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
+          <Pressable
+            style={styles.backButton}
+            onPress={handleBack}
+          >
+            <Ionicons name="chevron-back" size={28} color="#007AFF" />
+          </Pressable>
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatar, { backgroundColor: getAvatarColor(displayName) }]}>
+              <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
+            </View>
+          </View>
+          <View style={styles.nameContainer}>
+            <Text style={styles.nameText} numberOfLines={1}>
+              {displayName}
+            </Text>
+          </View>
+        </View>
+        <ScrollView style={{ flex: 1, padding: 20 }} />
+      </View>
+    );
+  }
 
   if (!contact) {
     return (
@@ -61,7 +105,7 @@ export default function ContactDetailScreen() {
   }
 
   const displayName = getFullName(contact);
-  const firstName = contact.firstName || '';
+  const contactFirstName = contact.firstName || '';
 
   // Helper to format location for display
   const formatLocation = (location: string) => {
@@ -104,7 +148,7 @@ export default function ContactDetailScreen() {
     
     if (changes.length === 0) return null;
     
-    return `${firstName} changed ${changes.join(', ')}.`;
+    return `${contactFirstName} changed ${changes.join(', ')}.`;
   };
 
   const changeMessage = getChangeMessage();
@@ -114,7 +158,7 @@ export default function ContactDetailScreen() {
       <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
         <Pressable 
           style={styles.backButton}
-          onPress={() => (from === 'add-friends' ? router.replace('/(tabs)/activity/add-friends') : router.back())}
+          onPress={handleBack}
         >
           <Ionicons name="chevron-back" size={28} color="#007AFF" />
         </Pressable>

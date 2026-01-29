@@ -15,7 +15,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/clerk-expo';
+import * as ExpoContacts from 'expo-contacts';
 import { createApi } from '../../../../lib/api';
+import { hashPhones } from '../../../../lib/phone-hash.util';
 import { useCallback, useEffect, useState } from 'react';
 
 export default function GroupEditScreen() {
@@ -32,6 +34,7 @@ export default function GroupEditScreen() {
   const [isMemberEditMode, setIsMemberEditMode] = useState(false);
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
   const [pendingRemovalIds, setPendingRemovalIds] = useState<Set<string>>(new Set());
+  const [phoneByMemberId, setPhoneByMemberId] = useState<Record<string, string>>({});
 
   const { data: group, isLoading, error } = useQuery({
     queryKey: ['group', groupId],
@@ -77,6 +80,50 @@ export default function GroupEditScreen() {
       setDescription(group.description ?? '');
     }
   }, [group?.id, group?.name, group?.description]);
+
+  // Resolve member phones from device contacts (same logic as add-friends)
+  useEffect(() => {
+    if (!group?.members?.length || !api) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // Only use contacts if permission was already granted (e.g. in add-friends); never request here
+        const { status } = await ExpoContacts.getPermissionsAsync();
+        if (status !== 'granted' || cancelled) return;
+        const result = await ExpoContacts.getContactsAsync({
+          fields: [ExpoContacts.Fields.PhoneNumbers, ExpoContacts.Fields.Name],
+        });
+        const data = result.data;
+        if (cancelled || !data?.length) return;
+        const deviceContacts = data
+          .filter((c) => c.phoneNumbers && c.phoneNumbers.length > 0)
+          .map((c) => ({
+            name: c.name ?? '',
+            phone: (c.phoneNumbers?.[0]?.number ?? '').replace(/\D/g, ''),
+          }))
+          .filter((item) => item.phone.length >= 10);
+        if (deviceContacts.length === 0 || cancelled) return;
+        const phoneNumbers = deviceContacts.map((c) => c.phone);
+        const phoneHashes = await hashPhones(phoneNumbers, api.hashPhones);
+        if (cancelled) return;
+        const checkResult = await api.checkContacts(phoneHashes);
+        if (cancelled) return;
+        const hashToPhone = new Map<string, string>();
+        for (let i = 0; i < phoneNumbers.length; i++) {
+          hashToPhone.set(phoneHashes[i], phoneNumbers[i]);
+        }
+        const next: Record<string, string> = {};
+        (checkResult.existingUsers ?? []).forEach((user: { phoneHash: string; id: string }) => {
+          const phone = hashToPhone.get(user.phoneHash);
+          if (phone) next[user.id] = phone;
+        });
+        if (!cancelled) setPhoneByMemberId(next);
+      } catch (e) {
+        if (!cancelled) console.error('[GroupEdit] Error resolving member phones:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [group?.id, group?.members?.length]);
 
   const hasChanges =
     name.trim() !== (group?.name ?? '') ||
@@ -278,33 +325,45 @@ export default function GroupEditScreen() {
             </View>
             {(group?.members?.length ?? 0) > 0 ? (
               <View style={styles.memberList}>
-                {(group?.members ?? []).filter((m: any) => !pendingRemovalIds.has(m.id)).map((member: any) => (
-                  <Pressable
-                    key={member.id}
-                    style={styles.memberRow}
-                    onPress={isMemberEditMode ? () => toggleMemberSelection(member.id) : undefined}
-                    disabled={!isMemberEditMode}
-                  >
-                    {isMemberEditMode && (
-                      <View style={[styles.memberCheckbox, selectedMemberIds.has(member.id) && styles.memberCheckboxChecked]}>
-                        {selectedMemberIds.has(member.id) && <View style={styles.memberCheckboxInner} />}
+                {(group?.members ?? []).filter((m: any) => !pendingRemovalIds.has(m.id)).map((member: any) => {
+                  const memberPhone = phoneByMemberId[member.id];
+                  // Same navigation as ContactListItem when clicking status: /contact/:id so profile opens identically
+                  const openContact = () => {
+                    const params: Record<string, string> = { from: 'group', groupId: groupId! };
+                    if (member.firstName != null) params.firstName = member.firstName;
+                    if (member.lastName != null) params.lastName = member.lastName;
+                    const queryString = Object.keys(params).length > 0
+                      ? '?' + Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
+                      : '';
+                    router.push(`/contact/${member.id}${queryString}`);
+                  };
+                  return (
+                    <Pressable
+                      key={member.id}
+                      style={styles.memberRow}
+                      onPress={isMemberEditMode ? () => toggleMemberSelection(member.id) : openContact}
+                    >
+                      {isMemberEditMode && (
+                        <View style={[styles.memberCheckbox, selectedMemberIds.has(member.id) && styles.memberCheckboxChecked]}>
+                          {selectedMemberIds.has(member.id) && <View style={styles.memberCheckboxInner} />}
+                        </View>
+                      )}
+                      <View style={styles.memberAvatar}>
+                        <Text style={styles.memberInitial}>
+                          {(member.firstName?.[0] || member.lastName?.[0] || '?').toUpperCase()}
+                        </Text>
                       </View>
-                    )}
-                    <View style={styles.memberAvatar}>
-                      <Text style={styles.memberInitial}>
-                        {(member.firstName?.[0] || member.lastName?.[0] || '?').toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.memberInfo}>
-                      <Text style={styles.memberName}>
-                        {[member.firstName, member.lastName].filter(Boolean).join(' ') || 'Unknown'}
-                      </Text>
-                      {member.email ? (
-                        <Text style={styles.memberEmail}>{member.email}</Text>
-                      ) : null}
-                    </View>
-                  </Pressable>
-                ))}
+                      <View style={styles.memberInfo}>
+                        <Text style={styles.memberName}>
+                          {[member.firstName, member.lastName].filter(Boolean).join(' ') || 'Unknown'}
+                        </Text>
+                        <Text style={styles.memberEmail}>
+                          {memberPhone ?? '—'}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
               </View>
             ) : (
               <Text style={styles.emptyMembers}>No members yet</Text>
