@@ -17,12 +17,19 @@ import {
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
-import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import * as Contacts from 'expo-contacts';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { createApi } from '../lib/api';
 import { hashPhones } from '../lib/phone-hash.util';
+
+const GROUP_AVATAR_COLORS = ['#E8D5B7', '#D4E4F7', '#E8E0F0', '#E0F0E8', '#F0E8E0', '#E8F0F0'];
+function getGroupColor(idOrName: string): string {
+  let n = 0;
+  for (let i = 0; i < idOrName.length; i++) n = (n * 31 + idOrName.charCodeAt(i)) >>> 0;
+  return GROUP_AVATAR_COLORS[n % GROUP_AVATAR_COLORS.length];
+}
 
 export type FindFriendsModalProps = {
   visible: boolean;
@@ -99,6 +106,12 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
   const noteRotation = noteWiggle.interpolate({
     inputRange: [-1, 0, 1],
     outputRange: ['-4deg', '0deg', '4deg'],
+  });
+
+  const { data: myGroups = [] } = useQuery({
+    queryKey: ['my-groups'],
+    queryFn: api.getMyGroups,
+    enabled: visible && !addToGroupMode,
   });
 
   const checkContactsMutation = useMutation({ mutationFn: api.checkContacts });
@@ -281,10 +294,14 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
   const plazaUsers = filteredContacts.filter((c) => contactsInPlaza.has(c.phone));
   const nonPlazaUsers = filteredContacts.filter((c) => !contactsInPlaza.has(c.phone));
 
-  const demoGroups = [
-    { id: 'coffee', label: 'Coffee', letter: 'C', backgroundColor: '#E8D5B7', count: 3 },
-    { id: 'musicians', label: 'Musicians', letter: 'M', backgroundColor: '#D4E4F7', count: 5 },
-  ];
+  const displayGroups = myGroups.map((g: { id: string; name: string; memberCount?: number }) => ({
+    id: g.id,
+    label: g.name,
+    letter: (g.name || '?').charAt(0).toUpperCase(),
+    backgroundColor: getGroupColor(g.id),
+    count: g.memberCount ?? 0,
+  }));
+
   const toggleGroup = (groupId: string) => {
     setSelectedGroups((prev) => {
       const next = new Set(prev);
@@ -525,7 +542,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
                 </View>
               </View>
               <View style={styles.groupsRow}>
-                {demoGroups.map((group) => {
+                {displayGroups.map((group) => {
                   const isSelected = selectedGroups.has(group.id);
                   return (
                     <Pressable
@@ -535,7 +552,6 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
                           toggleGroup(group.id);
                         } else {
                           router.push(`/(tabs)/activity/groups/${group.id}`);
-                          // Don't close modal so back from group screen returns here
                         }
                       }}
                     >
