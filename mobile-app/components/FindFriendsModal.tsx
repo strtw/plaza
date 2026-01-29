@@ -542,6 +542,17 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
                 </View>
               </View>
               <View style={styles.groupsRow}>
+                {!groupsLocked && (
+                  <Pressable
+                    onPress={() => router.push('/(tabs)/activity/add-friends?from=groups')}
+                    style={styles.groupAvatarWrapper}
+                  >
+                    <View style={[styles.groupAvatarAdd]}>
+                      <Ionicons name="add" size={24} color="#007AFF" />
+                    </View>
+                    <Text style={styles.groupAvatarLabel}>New group</Text>
+                  </Pressable>
+                )}
                 {displayGroups.map((group) => {
                   const isSelected = selectedGroups.has(group.id);
                   return (
