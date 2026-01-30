@@ -128,6 +128,18 @@ export default function ContactDetailScreen() {
     });
   };
 
+  // Helper: "Available until 2pm" or "Available until 11:15 am"
+  const formatAvailableUntil = (dateString: string) => {
+    const d = new Date(dateString);
+    const h = d.getHours();
+    const m = d.getMinutes();
+    const ampm = h >= 12 ? 'pm' : 'am';
+    const hour12 = h % 12 || 12;
+    if (m === 0) return `Available until ${hour12}${ampm}`;
+    const min = m.toString().padStart(2, '0');
+    return `Available until ${hour12}:${min} ${ampm}`;
+  };
+
   // Build change message
   const getChangeMessage = () => {
     if (!showUpdatedComparison || !status || !parsedPreviousStatus) return null;
@@ -223,17 +235,13 @@ export default function ContactDetailScreen() {
             ) : (
               // Normal status display (not updated)
               <View>
-                <Text style={{ fontSize: 18, marginBottom: 10 }}>
-                  Status: {status.status}
-                </Text>
                 {status.message && (
-                  <Text style={{ fontSize: 16, color: '#666', marginBottom: 10 }}>
+                  <Text style={{ fontSize: 16, color: '#333', marginBottom: 10 }}>
                     {status.message}
                   </Text>
                 )}
                 <Text style={{ fontSize: 14, color: '#999' }}>
-                  Available: {new Date(status.startTime).toLocaleTimeString()} -{' '}
-                  {new Date(status.endTime).toLocaleTimeString()}
+                  {formatAvailableUntil(status.endTime)}
                 </Text>
               </View>
             )}
