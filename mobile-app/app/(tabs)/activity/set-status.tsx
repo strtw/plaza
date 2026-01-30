@@ -92,20 +92,6 @@ export default function SetStatusScreen() {
     },
   });
 
-  const deleteStatusMutation = useMutation({
-    mutationFn: api.deleteMyStatus,
-    onSuccess: () => {
-      queryClient.setQueryData(['my-status'], null);
-      setCurrentStatus(null);
-      queryClient.invalidateQueries({ queryKey: ['my-status'] });
-      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
-      router.back();
-    },
-    onError: (error: any) => {
-      Alert.alert('Error', error.message || 'Failed to clear status. Please try again.');
-    },
-  });
-
   const handleSaveStatus = () => {
     if (!message.trim() || !location || !endTime) return;
     const locationMap: Record<'home' | 'greenspace' | 'third-place', string> = {
@@ -142,8 +128,6 @@ export default function SetStatusScreen() {
     endTime !== null &&
     timeTouched &&
     lastAddFriendsCount >= 2;
-  const hasExistingStatus = !!storeStatus && !!currentStatus;
-
   if (!isLoaded || !isSignedIn) return null;
 
   return (
@@ -288,26 +272,6 @@ export default function SetStatusScreen() {
           </Pressable>
         </View>
 
-        {hasExistingStatus && (
-          <View style={styles.clearStatusContainer}>
-            <Pressable
-              style={styles.clearStatusButton}
-              onPress={() => {
-                Alert.alert(
-                  'Clear Status',
-                  'Are you sure you want to clear your current status?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Clear', style: 'destructive', onPress: () => deleteStatusMutation.mutate() },
-                  ]
-                );
-              }}
-              disabled={deleteStatusMutation.isPending}
-            >
-              <Text style={styles.clearStatusText}>Clear Status</Text>
-            </Pressable>
-          </View>
-        )}
       </ScrollView>
     </View>
   );
@@ -400,14 +364,4 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tellFriendsCount: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
-  clearStatusContainer: { marginTop: 20, marginBottom: 20, alignItems: 'flex-end' },
-  clearStatusButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#FF3B30',
-    backgroundColor: 'transparent',
-  },
-  clearStatusText: { fontSize: 16, color: '#FF3B30', fontWeight: '600' },
 });

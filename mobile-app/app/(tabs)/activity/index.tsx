@@ -1195,7 +1195,14 @@ function ActivityScreenContent() {
             styles.myStatusRowContainer,
             (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowContainerDisabled
           ]}
-          onPress={() => router.push('/(tabs)/activity/set-status')}
+          onPress={() => {
+            const hasActiveStatus = storeStatus && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus);
+            if (hasActiveStatus) {
+              router.push('/(tabs)/activity/my-status');
+            } else {
+              router.push('/(tabs)/activity/set-status');
+            }
+          }}
         >
           <View style={styles.myStatusRowAvatarContainer}>
             <View style={[
