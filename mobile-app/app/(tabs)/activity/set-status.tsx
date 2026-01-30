@@ -48,6 +48,7 @@ export default function SetStatusScreen() {
 
   const [message, setMessage] = useState('');
   const [showInviteesModal, setShowInviteesModal] = useState(false);
+  const [selectedInviteeIds, setSelectedInviteeIds] = useState<string[]>([]);
   const [location, setLocation] = useState<'home' | 'greenspace' | 'third-place' | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(() => getDefaultEndTime());
   const [timeTouched, setTimeTouched] = useState(false);
@@ -56,6 +57,7 @@ export default function SetStatusScreen() {
   const initialLocationRef = useRef<'home' | 'greenspace' | 'third-place' | null>(null);
   const initialEndTimeMsRef = useRef<number>(0);
   const initialInviteesCountRef = useRef(0);
+  const initialInviteeIdsRef = useRef<string[]>([]);
 
   const { data: currentStatus } = useQuery({
     queryKey: ['my-status'],
@@ -94,10 +96,12 @@ export default function SetStatusScreen() {
       setEndTime(prefilledEndTime);
       setTimeTouched(true);
       setLastAddFriendsCount(inviteesCount);
+      setSelectedInviteeIds(currentStatus.sharedWith ?? []);
       initialMessageRef.current = prefilledMessage;
       initialLocationRef.current = prefilledLocation;
       initialEndTimeMsRef.current = prefilledEndTime.getTime();
       initialInviteesCountRef.current = inviteesCount;
+      initialInviteeIdsRef.current = currentStatus.sharedWith ?? [];
       hasPrefilledRef.current = true;
     }
   }, [currentStatus?.id, currentStatus?.endTime, message, location, timeTouched]);
@@ -123,14 +127,13 @@ export default function SetStatusScreen() {
       'greenspace': 'GREENSPACE',
       'third-place': 'THIRD_PLACE',
     };
-    const friendIds = contacts?.map((c: any) => c.id).filter(Boolean) || [];
     createStatusMutation.mutate({
       status: AvailabilityStatus.AVAILABLE,
       message: message.trim(),
       location: locationMap[location],
       startTime: new Date().toISOString(),
       endTime: endTime.toISOString(),
-      sharedWith: friendIds,
+      sharedWith: selectedInviteeIds,
     });
   };
 
@@ -154,12 +157,16 @@ export default function SetStatusScreen() {
     lastAddFriendsCount >= 2;
 
   const isEditing = hasPrefilledRef.current && !!currentStatus;
+  const hasInviteesChanged =
+    selectedInviteeIds.length !== initialInviteeIdsRef.current.length ||
+    selectedInviteeIds.some((id) => !initialInviteeIdsRef.current.includes(id));
   const hasChanged =
     !isEditing ||
     message !== initialMessageRef.current ||
     location !== initialLocationRef.current ||
     (endTime?.getTime() ?? 0) !== initialEndTimeMsRef.current ||
-    lastAddFriendsCount !== initialInviteesCountRef.current;
+    lastAddFriendsCount !== initialInviteesCountRef.current ||
+    hasInviteesChanged;
 
   const isFormReady = allFieldsFilled && (!isEditing || hasChanged);
 
@@ -297,7 +304,7 @@ export default function SetStatusScreen() {
 
         <View style={styles.tellFriendsContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>Tell some friends</Text>
+            <Text style={styles.sectionLabel}>Add some friends:</Text>
             <Text style={styles.requiredIndicator}>Required</Text>
           </View>
           <Pressable style={styles.tellFriendsButton} onPress={() => setShowInviteesModal(true)}>
@@ -312,11 +319,13 @@ export default function SetStatusScreen() {
       </ScrollView>
       <FindFriendsModal
         visible={showInviteesModal}
-        onClose={(count) => {
+        onClose={(count, selectedUserIds) => {
           if (count !== undefined) setLastAddFriendsCount(count);
+          if (selectedUserIds !== undefined) setSelectedInviteeIds(selectedUserIds);
           setShowInviteesModal(false);
         }}
         asFullScreen={false}
+        initialSelectedUserIds={currentStatus?.sharedWith ?? []}
       />
     </View>
   );

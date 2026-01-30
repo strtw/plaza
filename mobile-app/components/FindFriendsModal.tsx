@@ -33,16 +33,18 @@ function getGroupColor(idOrName: string): string {
 
 export type FindFriendsModalProps = {
   visible: boolean;
-  onClose: (count?: number) => void;
+  onClose: (count?: number, selectedUserIds?: string[]) => void;
   /** When true, render as a full-screen View instead of Modal (e.g. when used as add-friends route). */
   asFullScreen?: boolean;
   /** When true, show group name/description and "Add friends to your group"; require group name for Done; bypass match/set-status on Done. */
   addToGroupMode?: boolean;
   /** When set, we're adding members to an existing group: hide name/description; Done adds selected members to this group and closes. */
   existingGroupId?: string;
+  /** Plaza user IDs to pre-select when opening (e.g. when editing a status and showing current invitees). */
+  initialSelectedUserIds?: string[];
 };
 
-export function FindFriendsModal({ visible, onClose, asFullScreen = false, addToGroupMode = false, existingGroupId }: FindFriendsModalProps) {
+export function FindFriendsModal({ visible, onClose, asFullScreen = false, addToGroupMode = false, existingGroupId, initialSelectedUserIds }: FindFriendsModalProps) {
   const { getToken } = useAuth();
   const router = useRouter();
   const api = createApi(getToken!);
@@ -65,6 +67,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
   const noteWiggle = useRef(new Animated.Value(0)).current;
   const tenSecondTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasStartedWiggleTimer = useRef(false);
+  const hasInitializedFromUserIdsRef = useRef(false);
 
   const runNoteWiggle = () => {
     Animated.sequence([
@@ -83,8 +86,22 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
         tenSecondTimer.current = null;
       }
       hasStartedWiggleTimer.current = false;
+      hasInitializedFromUserIdsRef.current = false;
     }
   }, [visible]);
+
+  // Pre-select contacts when opening with initialSelectedUserIds (e.g. editing status invitees)
+  useEffect(() => {
+    if (!visible || !initialSelectedUserIds?.length || hasInitializedFromUserIdsRef.current) return;
+    const userIdSet = new Set(initialSelectedUserIds);
+    const phones = Object.entries(plazaUserIdByPhone)
+      .filter(([, userId]) => userIdSet.has(userId))
+      .map(([phone]) => phone);
+    if (phones.length > 0) {
+      setSelectedContacts(new Set(phones));
+      hasInitializedFromUserIdsRef.current = true;
+    }
+  }, [visible, initialSelectedUserIds, plazaUserIdByPhone]);
 
   // Start 10s wiggle timer only when exactly one user is selected; wiggle runs once at 10s. Re-opening with 2+ selected does not wiggle.
   useEffect(() => {
@@ -279,7 +296,10 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
       await matchContactsMutation.mutateAsync(phoneHashes);
       await queryClient.invalidateQueries({ queryKey: ['friends'] });
       const count = selected.length;
-      onClose(count);
+      const selectedUserIds = Array.from(selectedContacts)
+        .map((phone) => plazaUserIdByPhone[phone])
+        .filter(Boolean);
+      onClose(count, selectedUserIds);
       // Keep selectedContacts so selection persists when modal is reopened
     } catch {
       // Error already shown by mutation
