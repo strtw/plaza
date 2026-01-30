@@ -56,6 +56,7 @@ export interface ContactStatus {
   location: StatusLocation;
   startTime: string;
   endTime: string;
+  sharedWith?: string[];
 }
 
 export interface CreateStatusInput {

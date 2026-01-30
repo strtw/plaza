@@ -52,6 +52,10 @@ export default function SetStatusScreen() {
   const [endTime, setEndTime] = useState<Date | null>(() => getDefaultEndTime());
   const [timeTouched, setTimeTouched] = useState(false);
   const hasPrefilledRef = useRef(false);
+  const initialMessageRef = useRef('');
+  const initialLocationRef = useRef<'home' | 'greenspace' | 'third-place' | null>(null);
+  const initialEndTimeMsRef = useRef<number>(0);
+  const initialInviteesCountRef = useRef(0);
 
   const { data: currentStatus } = useQuery({
     queryKey: ['my-status'],
@@ -81,9 +85,19 @@ export default function SetStatusScreen() {
       !hasPrefilledRef.current &&
       !userHasEnteredData
     ) {
-      setMessage(currentStatus.message || '');
-      setLocation(mapBackendToFrontendLocation(currentStatus.location));
-      setEndTime(new Date(currentStatus.endTime));
+      const prefilledMessage = currentStatus.message || '';
+      const prefilledLocation = mapBackendToFrontendLocation(currentStatus.location);
+      const prefilledEndTime = new Date(currentStatus.endTime);
+      const inviteesCount = currentStatus.sharedWith?.length ?? 0;
+      setMessage(prefilledMessage);
+      setLocation(prefilledLocation);
+      setEndTime(prefilledEndTime);
+      setTimeTouched(true);
+      setLastAddFriendsCount(inviteesCount);
+      initialMessageRef.current = prefilledMessage;
+      initialLocationRef.current = prefilledLocation;
+      initialEndTimeMsRef.current = prefilledEndTime.getTime();
+      initialInviteesCountRef.current = inviteesCount;
       hasPrefilledRef.current = true;
     }
   }, [currentStatus?.id, currentStatus?.endTime, message, location, timeTouched]);
@@ -132,12 +146,23 @@ export default function SetStatusScreen() {
     }
   };
 
-  const isFormReady =
+  const allFieldsFilled =
     message.trim().length > 0 &&
     location !== null &&
     endTime !== null &&
     timeTouched &&
     lastAddFriendsCount >= 2;
+
+  const isEditing = hasPrefilledRef.current && !!currentStatus;
+  const hasChanged =
+    !isEditing ||
+    message !== initialMessageRef.current ||
+    location !== initialLocationRef.current ||
+    (endTime?.getTime() ?? 0) !== initialEndTimeMsRef.current ||
+    lastAddFriendsCount !== initialInviteesCountRef.current;
+
+  const isFormReady = allFieldsFilled && (!isEditing || hasChanged);
+
   if (!isLoaded || !isSignedIn) return null;
 
   return (
@@ -146,7 +171,9 @@ export default function SetStatusScreen() {
         <Pressable onPress={() => router.back()} style={styles.closeButton}>
           <Ionicons name="close" size={28} color="#000" />
         </Pressable>
-        <Text style={styles.headerTitle}>Set your status</Text>
+        <Text style={styles.headerTitle}>
+          {isEditing ? 'Edit your status' : 'Set your status'}
+        </Text>
         <Pressable
           onPress={handleSaveStatus}
           style={[
