@@ -111,15 +111,12 @@ const SwipeableContactListItem = ({
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Only respond to horizontal swipes (more horizontal than vertical)
         return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
       },
       onPanResponderGrant: () => {
-        // Stop any ongoing animations
         translateX.stopAnimation();
       },
       onPanResponderMove: (_, gestureState) => {
-        // Allow swiping left to reveal or right to hide
         if (gestureState.dx < 0) {
           // Swiping left - reveal action
           const newValue = Math.max(gestureState.dx, -ACTION_WIDTH);
@@ -136,9 +133,7 @@ const SwipeableContactListItem = ({
       },
       onPanResponderRelease: (_, gestureState) => {
         const currentValue = currentTranslateX.current;
-        
         if (gestureState.dx < SWIPE_THRESHOLD || (currentValue < SWIPE_THRESHOLD && gestureState.dx < 0)) {
-          // Swipe left enough - reveal action
           setOpenRowId(contact.id);
           Animated.spring(translateX, {
             toValue: -ACTION_WIDTH,
@@ -149,7 +144,6 @@ const SwipeableContactListItem = ({
             currentTranslateX.current = -ACTION_WIDTH;
           });
         } else {
-          // Not enough swipe or swiping right - snap back
           setOpenRowId(null);
           Animated.spring(translateX, {
             toValue: 0,
@@ -294,7 +288,7 @@ function ActivityScreenContent() {
   
   // Track which row is currently swiped open (only one at a time)
   const [openRowId, setOpenRowId] = useState<string | null>(null);
-  
+
   // Track locally muted contacts for immediate UI updates (before query refetch)
   const [locallyMutedContacts, setLocallyMutedContacts] = useState<Set<string>>(new Set());
 

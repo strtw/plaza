@@ -457,7 +457,7 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
         </View>
         <View style={styles.modalContent}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-            <View style={styles.modalContentInner}>
+            <View>
           <Text style={styles.modalTitle}>
             {existingGroupId ? 'Add friends to this group' : addToGroupMode ? 'Add friends to your group' : 'Add friends'}
           </Text>
@@ -507,6 +507,8 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
               />
             </View>
           )}
+            </View>
+          </TouchableWithoutFeedback>
 
           {selectedContacts.size > 0 && (
             <View style={styles.selectedPillsSection}>
@@ -527,6 +529,8 @@ export function FindFriendsModal({ visible, onClose, asFullScreen = false, addTo
             </View>
           )}
 
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View style={styles.modalContentInner}>
           {!isLoadingContacts && deviceContacts.length > 0 && !addToGroupMode && (
             <View style={styles.groupsSection}>
               <View style={styles.sectionHeader}>

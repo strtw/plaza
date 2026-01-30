@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@clerk/clerk-expo';
 import { createApi } from '../lib/api';
+import { HamburgerMenuProvider } from './HamburgerMenu';
 
 export function TabsLayoutWrapper() {
   const router = useRouter();
@@ -45,7 +46,8 @@ export function TabsLayoutWrapper() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Slot />
+      <HamburgerMenuProvider>
+        <Slot />
       
       {/* Custom Tab Bar */}
       <View style={styles.tabBar}>
@@ -92,6 +94,7 @@ export function TabsLayoutWrapper() {
           </Text>
         </TouchableOpacity>
       </View>
+      </HamburgerMenuProvider>
     </View>
   );
 }
