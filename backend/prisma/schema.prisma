@@ -86,9 +86,10 @@ model Status {
   location   StatusLocation
   startTime  DateTime
   endTime    DateTime
-  sharedWith String[]           @default([]) // Array of user IDs who receive this status
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  sharedWith       String[]   @default([]) // Array of user IDs who receive this status
+  onMyWayUserIds   String[]   @default([]) // User IDs who tapped "On my way"
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   acceptedByFriends Friend[] @relation("AcceptedFromStatus")

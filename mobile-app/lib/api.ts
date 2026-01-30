@@ -154,6 +154,14 @@ export const createApi = (getToken: () => Promise<string | null>) => {
       fetchApi('/status/me', {
         method: 'DELETE',
       }),
+    setOnMyWay: (statusId: string) =>
+      fetchApi(`/status/${encodeURIComponent(statusId)}/on-my-way`, {
+        method: 'POST',
+      }),
+    cancelOnMyWay: (statusId: string) =>
+      fetchApi(`/status/${encodeURIComponent(statusId)}/on-my-way`, {
+        method: 'DELETE',
+      }),
     generateInvite: () =>
       fetchApi('/invites/generate', { method: 'POST' }),
     getInvite: (code: string) => fetchApi(`/invites/${code}`),

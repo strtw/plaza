@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaClient, AvailabilityStatus, FriendStatus, StatusLocation } from '@prisma/client';
 import { CreateStatusDto } from './dto/create-status.dto';
@@ -203,6 +203,60 @@ export class StatusService {
       });
       return []; // Return empty array on error to prevent breaking the app
     }
+  }
+
+  /**
+   * Add current user to "on my way" for a status. Fails if status not found, not active, or user not in sharedWith.
+   */
+  async setOnMyWay(databaseUserId: string, statusId: string) {
+    const now = new Date();
+    const status = await prisma.status.findUnique({
+      where: { id: statusId },
+    });
+    if (!status) {
+      throw new HttpException('Status not found', HttpStatus.NOT_FOUND);
+    }
+    if (status.startTime > now || status.endTime < now) {
+      throw new HttpException('Status is not active', HttpStatus.BAD_REQUEST);
+    }
+    if (!status.sharedWith.includes(databaseUserId)) {
+      throw new HttpException('You are not invited to this status', HttpStatus.FORBIDDEN);
+    }
+    const current = status.onMyWayUserIds ?? [];
+    if (current.includes(databaseUserId)) {
+      return prisma.status.findUnique({ where: { id: statusId } });
+    }
+    return prisma.status.update({
+      where: { id: statusId },
+      data: { onMyWayUserIds: [...current, databaseUserId] },
+    });
+  }
+
+  /**
+   * Remove current user from "on my way" for a status. Same validation as setOnMyWay.
+   */
+  async cancelOnMyWay(databaseUserId: string, statusId: string) {
+    const now = new Date();
+    const status = await prisma.status.findUnique({
+      where: { id: statusId },
+    });
+    if (!status) {
+      throw new HttpException('Status not found', HttpStatus.NOT_FOUND);
+    }
+    if (status.startTime > now || status.endTime < now) {
+      throw new HttpException('Status is not active', HttpStatus.BAD_REQUEST);
+    }
+    if (!status.sharedWith.includes(databaseUserId)) {
+      throw new HttpException('You are not invited to this status', HttpStatus.FORBIDDEN);
+    }
+    const current = status.onMyWayUserIds ?? [];
+    if (!current.includes(databaseUserId)) {
+      return prisma.status.findUnique({ where: { id: statusId } });
+    }
+    return prisma.status.update({
+      where: { id: statusId },
+      data: { onMyWayUserIds: current.filter((id) => id !== databaseUserId) },
+    });
   }
 
   /**

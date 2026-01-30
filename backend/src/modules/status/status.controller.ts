@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Body, UseGuards, Request, Query, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, UseGuards, Request, Query, Param, HttpException, HttpStatus } from '@nestjs/common';
 import { StatusService } from './status.service';
 import { CreateStatusDto } from './dto/create-status.dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
@@ -106,6 +106,32 @@ export class StatusController {
       throw new HttpException(
         error?.message || 'Failed to delete status',
         error?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post(':statusId/on-my-way')
+  async setOnMyWay(@Request() req, @Param('statusId') statusId: string) {
+    try {
+      const databaseUserId = await this.getDatabaseUserId(req.userId);
+      return await this.statusService.setOnMyWay(databaseUserId, statusId);
+    } catch (error: any) {
+      throw new HttpException(
+        error?.message ?? 'Failed to set on my way',
+        error?.status ?? HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Delete(':statusId/on-my-way')
+  async cancelOnMyWay(@Request() req, @Param('statusId') statusId: string) {
+    try {
+      const databaseUserId = await this.getDatabaseUserId(req.userId);
+      return await this.statusService.cancelOnMyWay(databaseUserId, statusId);
+    } catch (error: any) {
+      throw new HttpException(
+        error?.message ?? 'Failed to cancel on my way',
+        error?.status ?? HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }

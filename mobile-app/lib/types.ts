@@ -57,6 +57,7 @@ export interface ContactStatus {
   startTime: string;
   endTime: string;
   sharedWith?: string[];
+  onMyWayUserIds?: string[];
 }
 
 export interface CreateStatusInput {
