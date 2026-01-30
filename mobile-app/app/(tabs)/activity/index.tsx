@@ -1176,7 +1176,7 @@ function ActivityScreenContent() {
     <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       <View style={[styles.headerContainer, { paddingTop: headerPaddingTop }]}>
         <HamburgerMenu />
-        <Text style={styles.headerTitle}>Activity</Text>
+        <Text style={styles.headerTitle}>Plaza</Text>
         <Pressable
           onPress={() => {
             setTempShowMuted(showMuted);
