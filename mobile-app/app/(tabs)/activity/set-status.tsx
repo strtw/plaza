@@ -5,10 +5,11 @@ import { AvailabilityStatus, StatusLocation, ContactStatus } from '../../../lib/
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUserStore } from '../../../stores/userStore';
+import { FindFriendsModal } from '../../../components/FindFriendsModal';
 
 const roundToNearest15Minutes = (date: Date): Date => {
   const rounded = new Date(date);
@@ -43,12 +44,14 @@ export default function SetStatusScreen() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentStatus: storeStatus, setCurrentStatus, lastAddFriendsCount } = useUserStore();
+  const { currentStatus: storeStatus, setCurrentStatus, lastAddFriendsCount, setLastAddFriendsCount } = useUserStore();
 
   const [message, setMessage] = useState('');
+  const [showInviteesModal, setShowInviteesModal] = useState(false);
   const [location, setLocation] = useState<'home' | 'greenspace' | 'third-place' | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(() => getDefaultEndTime());
   const [timeTouched, setTimeTouched] = useState(false);
+  const hasPrefilledRef = useRef(false);
 
   const { data: currentStatus } = useQuery({
     queryKey: ['my-status'],
@@ -69,14 +72,21 @@ export default function SetStatusScreen() {
     enabled: isLoaded && isSignedIn,
   });
 
-  // Prefill form when we have an active status
+  // Prefill form only when editing an existing status and form is still empty (never overwrite user input)
   useEffect(() => {
-    if (currentStatus && currentStatus.endTime) {
+    const userHasEnteredData = message.trim().length > 0 || location != null || timeTouched;
+    if (
+      currentStatus &&
+      currentStatus.endTime &&
+      !hasPrefilledRef.current &&
+      !userHasEnteredData
+    ) {
       setMessage(currentStatus.message || '');
       setLocation(mapBackendToFrontendLocation(currentStatus.location));
       setEndTime(new Date(currentStatus.endTime));
+      hasPrefilledRef.current = true;
     }
-  }, [currentStatus?.id]);
+  }, [currentStatus?.id, currentStatus?.endTime, message, location, timeTouched]);
 
   const createStatusMutation = useMutation({
     mutationFn: api.createStatus,
@@ -263,7 +273,7 @@ export default function SetStatusScreen() {
             <Text style={styles.sectionLabel}>Tell some friends</Text>
             <Text style={styles.requiredIndicator}>Required</Text>
           </View>
-          <Pressable style={styles.tellFriendsButton} onPress={() => router.push('/(tabs)/activity/add-friends')}>
+          <Pressable style={styles.tellFriendsButton} onPress={() => setShowInviteesModal(true)}>
             <Ionicons name="add" size={28} color="#007AFF" />
             <Ionicons name="people" size={28} color="#007AFF" />
             {lastAddFriendsCount > 0 && (
@@ -273,6 +283,14 @@ export default function SetStatusScreen() {
         </View>
 
       </ScrollView>
+      <FindFriendsModal
+        visible={showInviteesModal}
+        onClose={(count) => {
+          if (count !== undefined) setLastAddFriendsCount(count);
+          setShowInviteesModal(false);
+        }}
+        asFullScreen={false}
+      />
     </View>
   );
 }
