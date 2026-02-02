@@ -226,6 +226,21 @@ export class StatusService {
     if (current.includes(databaseUserId)) {
       return prisma.status.findUnique({ where: { id: statusId } });
     }
+    // User can only be "on my way" to one status at a time
+    const alreadyOnMyWayElsewhere = await prisma.status.findFirst({
+      where: {
+        id: { not: statusId },
+        startTime: { lte: now },
+        endTime: { gte: now },
+        onMyWayUserIds: { has: databaseUserId },
+      },
+    });
+    if (alreadyOnMyWayElsewhere) {
+      throw new HttpException(
+        "You're already on your way to someone else. Cancel that first.",
+        HttpStatus.BAD_REQUEST
+      );
+    }
     return prisma.status.update({
       where: { id: statusId },
       data: { onMyWayUserIds: [...current, databaseUserId] },

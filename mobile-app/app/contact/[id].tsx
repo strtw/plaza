@@ -50,13 +50,70 @@ export default function ContactDetailScreen() {
     queryFn: api.getContacts,
   });
 
+  const { data: currentUser } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: api.getOrCreateMe,
+  });
+
   const { data: statuses } = useQuery({
     queryKey: ['friends-statuses'],
     queryFn: api.getFriendsStatuses,
   });
 
+  const { data: myStatus } = useQuery({
+    queryKey: ['my-status'],
+    queryFn: api.getMyStatus,
+  });
+
+  const queryClient = useQueryClient();
+  const setOnMyWayMutation = useMutation({
+    mutationFn: (statusId: string) => api.setOnMyWay(statusId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['my-status'] });
+    },
+  });
+  const cancelOnMyWayMutation = useMutation({
+    mutationFn: (statusId: string) => api.cancelOnMyWay(statusId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['my-status'] });
+    },
+  });
+
   const contact = id ? contacts?.find((c: any) => c.id === id) : null;
   const status = statuses?.find((s: any) => s.user?.id === id || s.userId === id);
+  const myUserId = currentUser?.id ?? null;
+  const amOnMyWay = status?.onMyWayUserIds && myUserId && status.onMyWayUserIds.includes(myUserId);
+  const amOnMyWayToAnotherStatus =
+    statuses?.some(
+      (s: any) => s.id !== status?.id && myUserId && s.onMyWayUserIds?.includes(myUserId)
+    ) ?? false;
+  const showOnMyWayButton = !!status;
+  const hasActiveStatus = !!myStatus;
+  const isOnMyWayButtonDisabled = hasActiveStatus || amOnMyWayToAnotherStatus;
+
+  const confirmOnMyWay = (statusId: string) => {
+    Alert.alert(
+      'On my way',
+      "Let this person know you're on your way?",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: "I'm on my way", onPress: () => setOnMyWayMutation.mutate(statusId) },
+      ]
+    );
+  };
+
+  const confirmCancelOnMyWay = (statusId: string) => {
+    Alert.alert(
+      'Cancel my attendance',
+      "Self-check - are you cancelling for the right reasons?" ,
+      [
+        { text: 'Close', style: 'cancel' },
+        { text: 'Yes, cancel', onPress: () => cancelOnMyWayMutation.mutate(statusId) },
+      ]
+    );
+  };
 
   const handleBack = () => {
     if (from === 'group' && groupId) {
@@ -245,6 +302,68 @@ export default function ContactDetailScreen() {
                 </Text>
               </View>
             )}
+            {showOnMyWayButton && (
+              <View style={styles.onMyWayButtonWrap}>
+                <Pressable
+                  style={[
+                    styles.onMyWayButton,
+                    amOnMyWay && !isOnMyWayButtonDisabled && styles.onMyWayButtonActive,
+                    (setOnMyWayMutation.isPending || cancelOnMyWayMutation.isPending) && styles.onMyWayButtonDisabled,
+                    isOnMyWayButtonDisabled && styles.onMyWayButtonDisabledByStatus,
+                  ]}
+                  onPress={() => {
+                    if (isOnMyWayButtonDisabled) return;
+                    if (setOnMyWayMutation.isPending || cancelOnMyWayMutation.isPending) return;
+                    if (amOnMyWay) {
+                      confirmCancelOnMyWay(status.id);
+                    } else {
+                      confirmOnMyWay(status.id);
+                    }
+                  }}
+                  disabled={isOnMyWayButtonDisabled || setOnMyWayMutation.isPending || cancelOnMyWayMutation.isPending}
+                >
+                {amOnMyWay && (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color={isOnMyWayButtonDisabled ? '#999' : '#fff'}
+                  />
+                )}
+                  <Text
+                    style={[
+                      styles.onMyWayButtonText,
+                      amOnMyWay && !isOnMyWayButtonDisabled && styles.onMyWayButtonTextActive,
+                      isOnMyWayButtonDisabled && styles.onMyWayButtonTextDisabled,
+                    ]}
+                  >
+                    {setOnMyWayMutation.isPending || cancelOnMyWayMutation.isPending
+                      ? '…'
+                      : amOnMyWay
+                        ? "You're on your way"
+                        : 'On my way'}
+                  </Text>
+                </Pressable>
+                {isOnMyWayButtonDisabled && (
+                  <Text style={styles.onMyWayDisabledHint}>
+                    {amOnMyWayToAnotherStatus
+                      ? "Cancel your current 'On my way' before heading to another."
+                      : 'Button disabled while you have an active status'}
+                  </Text>
+                )}
+                {amOnMyWay && !isOnMyWayButtonDisabled && (
+                  <Pressable
+                    style={styles.cancelAttendanceButton}
+                    onPress={() => {
+                      if (setOnMyWayMutation.isPending || cancelOnMyWayMutation.isPending) return;
+                      confirmCancelOnMyWay(status.id);
+                    }}
+                    disabled={setOnMyWayMutation.isPending || cancelOnMyWayMutation.isPending}
+                  >
+                    <Text style={styles.cancelAttendanceButtonText}>Cancel my attendance</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
           </View>
         ) : (
           <Text>No current status</Text>
@@ -349,6 +468,59 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     fontStyle: 'italic',
+  },
+  onMyWayButtonWrap: {
+    marginTop: 20,
+  },
+  onMyWayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    backgroundColor: '#fff',
+  },
+  onMyWayButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  onMyWayButtonDisabled: {
+    opacity: 0.6,
+  },
+  onMyWayButtonDisabledByStatus: {
+    borderColor: '#ccc',
+    backgroundColor: '#f5f5f5',
+  },
+  onMyWayButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  onMyWayButtonTextActive: {
+    color: '#fff',
+  },
+  onMyWayButtonTextDisabled: {
+    color: '#999',
+  },
+  onMyWayDisabledHint: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  cancelAttendanceButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  cancelAttendanceButtonText: {
+    fontSize: 15,
+    color: '#666',
+    textDecorationLine: 'underline',
   },
 });
 
