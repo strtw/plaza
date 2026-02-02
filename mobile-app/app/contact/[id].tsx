@@ -340,7 +340,7 @@ export default function ContactDetailScreen() {
                     {setOnMyWayMutation.isPending || cancelOnMyWayMutation.isPending
                       ? '…'
                       : amOnMyWay
-                        ? "You're on your way"
+                        ? "You're attending!"
                         : 'On my way'}
                   </Text>
                 </Pressable>
