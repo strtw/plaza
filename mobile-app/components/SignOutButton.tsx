@@ -1,15 +1,17 @@
 import { useClerk } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Text, TouchableOpacity } from 'react-native';
 
 export const SignOutButton = () => {
   const { signOut } = useClerk();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const handleSignOut = async () => {
     try {
       await signOut();
-      // After signing out, redirect to sign-in page
+      queryClient.removeQueries({ queryKey: ['current-user'] });
       router.replace('/(auth)/sign-in');
     } catch (err) {
       console.error('Error signing out:', err);

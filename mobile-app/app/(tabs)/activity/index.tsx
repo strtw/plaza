@@ -378,6 +378,7 @@ function ActivityScreenContent() {
     queryKey: ['current-user'],
     queryFn: api.getOrCreateMe,
     enabled: isLoaded && isSignedIn,
+    staleTime: Infinity,
   });
 
   // Sync API response to store

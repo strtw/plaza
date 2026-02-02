@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useClerk } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +41,7 @@ export function HamburgerMenuProvider({ children }: { children: React.ReactNode 
   const [menuVisible, setMenuVisible] = useState(false);
   const { width: screenWidth } = useWindowDimensions();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { signOut } = useClerk();
   const insets = useSafeAreaInsets();
 
@@ -59,6 +61,7 @@ export function HamburgerMenuProvider({ children }: { children: React.ReactNode 
   const handleSignOut = async () => {
     try {
       await signOut();
+      queryClient.removeQueries({ queryKey: ['current-user'] });
       router.replace('/(auth)/sign-in');
     } catch (err) {
       console.error('Error signing out:', err);

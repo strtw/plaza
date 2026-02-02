@@ -20,9 +20,19 @@ export class UsersController {
   async getOrCreateMe(@Request() req) {
     const clerkId = req.userId;
 
-    // Get user info from Clerk
-    const clerkUser = await clerkClient.users.getUser(clerkId);
-    
+    let clerkUser;
+    try {
+      clerkUser = await clerkClient.users.getUser(clerkId);
+    } catch (err: any) {
+      const isNetwork = err?.code === 'api_response_error' && err?.errors?.[0]?.message === 'fetch failed';
+      throw new HttpException(
+        isNetwork
+          ? 'Unable to reach authentication service. Check your connection and CLERK_SECRET_KEY.'
+          : err?.message ?? 'Authentication service error',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+
     // Extract phone number from Clerk user
     // Clerk stores phone numbers in primaryPhoneNumberId, need to get the actual number
     const phoneNumber = clerkUser.primaryPhoneNumber?.phoneNumber;
@@ -66,10 +76,20 @@ export class UsersController {
       throw new BadRequestException('Last name is required');
     }
 
-    // Get user info from Clerk to get phone number
-    const clerkUser = await clerkClient.users.getUser(clerkId);
+    let clerkUser;
+    try {
+      clerkUser = await clerkClient.users.getUser(clerkId);
+    } catch (err: any) {
+      const isNetwork = err?.code === 'api_response_error' && err?.errors?.[0]?.message === 'fetch failed';
+      throw new HttpException(
+        isNetwork
+          ? 'Unable to reach authentication service. Check your connection and CLERK_SECRET_KEY.'
+          : err?.message ?? 'Authentication service error',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
     const phoneNumber = clerkUser.primaryPhoneNumber?.phoneNumber;
-    
+
     if (!phoneNumber) {
       throw new BadRequestException('Phone number not found in Clerk user');
     }

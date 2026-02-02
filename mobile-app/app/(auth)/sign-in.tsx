@@ -2,12 +2,14 @@ import React from 'react';
 import { Text, TextInput, TouchableOpacity, View, ActivityIndicator, Keyboard, ScrollView, Pressable } from 'react-native';
 import { useSignIn, useAuth } from '@clerk/clerk-expo';
 import { Link, useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const { getToken } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [pendingVerification, setPendingVerification] = React.useState(false);
   const [code, setCode] = React.useState('');
@@ -108,7 +110,8 @@ export default function SignInScreen() {
         // The API will handle waiting for the token
         try {
           const api = createApi(getToken);
-          await api.getOrCreateMe();
+          const user = await api.getOrCreateMe();
+          queryClient.setQueryData(['current-user'], user);
           console.log('User created/updated in Plaza database');
         } catch (error: any) {
           console.error('Error creating user in Plaza database:', error);

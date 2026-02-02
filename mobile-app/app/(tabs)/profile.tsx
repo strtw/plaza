@@ -1,6 +1,6 @@
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, Modal, TextInput, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../lib/api';
 import { getFullName } from '../../lib/types';
 import { Redirect, useRouter } from 'expo-router';
@@ -13,6 +13,7 @@ function ProfileScreenContent() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const { signOut } = useClerk();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const api = createApi(getToken);
   const insets = useSafeAreaInsets();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -23,6 +24,7 @@ function ProfileScreenContent() {
     queryKey: ['current-user'],
     queryFn: api.getOrCreateMe,
     enabled: isLoaded && isSignedIn,
+    staleTime: Infinity,
   });
 
   // Delete account mutation
@@ -36,6 +38,7 @@ function ProfileScreenContent() {
       // Sign out from Clerk (account is already deleted, but we need to clear the session)
       try {
         await signOut();
+        queryClient.removeQueries({ queryKey: ['current-user'] });
         router.replace('/(auth)/sign-in');
       } catch (error) {
         // Even if signOut fails, redirect to sign-in

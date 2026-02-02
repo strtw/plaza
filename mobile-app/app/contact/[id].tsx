@@ -53,6 +53,7 @@ export default function ContactDetailScreen() {
   const { data: currentUser } = useQuery({
     queryKey: ['current-user'],
     queryFn: api.getOrCreateMe,
+    staleTime: Infinity,
   });
 
   const { data: statuses } = useQuery({
