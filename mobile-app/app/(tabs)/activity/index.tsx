@@ -381,6 +381,24 @@ function ActivityScreenContent() {
     staleTime: Infinity,
   });
 
+  const { data: endedAttendances = [] } = useQuery({
+    queryKey: ['ended-attendances'],
+    queryFn: api.getEndedAttendances,
+    enabled: isLoaded && isSignedIn,
+    refetchInterval: 10000,
+  });
+
+  const acknowledgeCancelledMutation = useMutation({
+    mutationFn: api.acknowledgeCancelled,
+    onSuccess: (_, statusId) => {
+      queryClient.invalidateQueries({ queryKey: ['ended-attendances'] });
+    },
+  });
+
+  const recentCancelledByHost = endedAttendances?.find((a: any) => a.endReason === 'cancelled_by_host') ?? null;
+
+  const onMyWayToStatus = (currentUser?.id && statuses?.find((s: any) => s.onMyWayUserIds?.includes(currentUser.id))) ?? null;
+
   // Sync API response to store
   useEffect(() => {
     if (currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)) {
@@ -1194,9 +1212,18 @@ function ActivityScreenContent() {
         <Pressable
           style={[
             styles.myStatusRowContainer,
-            (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowContainerDisabled
+            !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowContainerDisabled
           ]}
           onPress={() => {
+            if (recentCancelledByHost) {
+              acknowledgeCancelledMutation.mutate(recentCancelledByHost.id);
+              router.push('/(tabs)/activity/set-status');
+              return;
+            }
+            if (onMyWayToStatus) {
+              router.push(`/contact/${onMyWayToStatus.userId}`);
+              return;
+            }
             const hasActiveStatus = storeStatus && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus);
             if (hasActiveStatus) {
               router.push('/(tabs)/activity/my-status');
@@ -1206,15 +1233,15 @@ function ActivityScreenContent() {
           }}
         >
           <View style={styles.myStatusRowAvatarContainer}>
-            <View style={[
+                <View style={[
               styles.myStatusRowAvatar,
-              (statusState === 'expired' || statusState === 'cleared')
+              !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared')
                 ? styles.avatarDisabled
                 : { backgroundColor: '#E5E5E5' }
             ]}>
               <Text style={[
                 styles.avatarText,
-                (statusState === 'expired' || statusState === 'cleared') && styles.avatarTextDisabled
+                !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.avatarTextDisabled
               ]}>{getInitials()}</Text>
             </View>
           </View>
@@ -1223,43 +1250,47 @@ function ActivityScreenContent() {
               <View style={styles.myStatusRowNameAndStatus}>
                 <Text style={[
                   styles.myStatusRowName,
-                  (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowNameDisabled
+                  !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowNameDisabled
                 ]} numberOfLines={1}>You</Text>
                 <View style={styles.myStatusRowMessageRow}>
                   <Text style={[
                     styles.myStatusRowMessage,
-                    (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowMessageDisabled
+                    !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowMessageDisabled
                   ]} numberOfLines={1}>
-                    {statusState === 'cleared'
-                      ? 'Status cleared by user'
-                      : statusState === 'expired'
-                        ? 'Status expired'
-                        : storeStatus && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)
-                          ? storeStatus.message
-                          : 'What are you up to?'}
+                    {recentCancelledByHost
+                      ? `${recentCancelledByHost.user ? getFullName(recentCancelledByHost.user) : 'Someone'} has cancelled their hang`
+                      : onMyWayToStatus
+                        ? `You are hanging out with ${onMyWayToStatus.user ? getFullName(onMyWayToStatus.user) : 'them'}`
+                        : statusState === 'cleared'
+                          ? 'Status cleared by user'
+                          : statusState === 'expired'
+                            ? 'Status expired'
+                            : storeStatus && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus)
+                              ? storeStatus.message
+                              : 'What are you up to?'}
                   </Text>
                 </View>
               </View>
               <View style={styles.myStatusRowRightIcons}>
-                {statusState === 'expired' && storeStatus?.endTime ? (
+                {!recentCancelledByHost && statusState === 'expired' && storeStatus?.endTime ? (
                   <View style={[styles.myStatusRowTimeBubble, styles.myStatusRowExpiredBubble]}>
                     <Text style={styles.myStatusRowTimeBubbleText}>expired</Text>
                   </View>
-                ) : statusState === 'cleared' && storeStatus?.endTime ? (
+                ) : !recentCancelledByHost && statusState === 'cleared' && storeStatus?.endTime ? (
                   <View style={[styles.myStatusRowTimeBubble, styles.myStatusRowClearedBubble]}>
                     <Text style={styles.myStatusRowTimeBubbleText}>cleared</Text>
                   </View>
-                ) : storeStatus?.endTime && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus) && getTimeRemaining(storeStatus.endTime) ? (
+                ) : !recentCancelledByHost && storeStatus?.endTime && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus) && getTimeRemaining(storeStatus.endTime) ? (
                   <View style={[styles.myStatusRowTimeBubble, { backgroundColor: '#25D366' }]}>
                     <Text style={styles.myStatusRowTimeBubbleText}>{getTimeRemaining(storeStatus.endTime)}</Text>
                   </View>
                 ) : null}
-                {!statusState && !storeStatus && !currentStatus && (
+                {!recentCancelledByHost && !onMyWayToStatus && !statusState && !storeStatus && !currentStatus && (
                   <View style={styles.myStatusRowAddStatusPill}>
                     <Text style={styles.myStatusRowAddStatusPillText}>+ Add status</Text>
                   </View>
                 )}
-                {storeStatus?.location && (statusState !== 'expired' && statusState !== 'cleared') && (
+                {!recentCancelledByHost && storeStatus?.location && (statusState !== 'expired' && statusState !== 'cleared') && (
                   <Ionicons
                     name={
                       storeStatus.location === StatusLocation.HOME ? 'home-outline' :

@@ -47,21 +47,24 @@ export class StatusService {
       const existingStatus = await prisma.status.findFirst({
         where: {
           userId,
+          endedAt: null,
           startTime: { lte: now },
           endTime: { gte: now },
         },
         orderBy: { createdAt: 'desc' },
       });
 
-      // Clean up any expired statuses for this user (maintains one-status-per-user rule)
-      const deletedCount = await prisma.status.deleteMany({
+      // Soft-end any expired statuses for this user (maintains one-status-per-user rule)
+      const softEnded = await prisma.status.updateMany({
         where: {
           userId,
           endTime: { lt: now },
+          endedAt: null,
         },
+        data: { endedAt: now, endReason: 'expired' },
       });
-      if (deletedCount.count > 0) {
-        console.log('[StatusService] Deleted', deletedCount.count, 'expired statuses for user');
+      if (softEnded.count > 0) {
+        console.log('[StatusService] Soft-ended', softEnded.count, 'expired statuses for user');
       }
       
       const statusData = {
@@ -107,6 +110,7 @@ export class StatusService {
       return prisma.status.findFirst({
         where: {
           userId,
+          endedAt: null,
           startTime: { lte: now },
           endTime: { gte: now },
         },
@@ -158,6 +162,7 @@ export class StatusService {
           AND: [
             {
               userId: { in: friendUserIds },
+              endedAt: null,
               startTime: { lte: now },
               endTime: { gte: now },
             },
@@ -216,7 +221,7 @@ export class StatusService {
     if (!status) {
       throw new HttpException('Status not found', HttpStatus.NOT_FOUND);
     }
-    if (status.startTime > now || status.endTime < now) {
+    if (status.endedAt != null || status.startTime > now || status.endTime < now) {
       throw new HttpException('Status is not active', HttpStatus.BAD_REQUEST);
     }
     if (!status.sharedWith.includes(databaseUserId)) {
@@ -230,6 +235,7 @@ export class StatusService {
     const alreadyOnMyWayElsewhere = await prisma.status.findFirst({
       where: {
         id: { not: statusId },
+        endedAt: null,
         startTime: { lte: now },
         endTime: { gte: now },
         onMyWayUserIds: { has: databaseUserId },
@@ -258,7 +264,7 @@ export class StatusService {
     if (!status) {
       throw new HttpException('Status not found', HttpStatus.NOT_FOUND);
     }
-    if (status.startTime > now || status.endTime < now) {
+    if (status.endedAt != null || status.startTime > now || status.endTime < now) {
       throw new HttpException('Status is not active', HttpStatus.BAD_REQUEST);
     }
     if (!status.sharedWith.includes(databaseUserId)) {
@@ -275,41 +281,140 @@ export class StatusService {
   }
 
   /**
-   * Delete all statuses for a user (used for status cancellation)
+   * Soft-end all active statuses for a user (used for status cancellation).
+   * Sets endedAt and endReason = 'cancelled_by_host' instead of deleting.
    */
   async deleteStatus(userId: string) {
     try {
-      const deletedCount = await prisma.status.deleteMany({
+      const now = new Date();
+      const result = await prisma.status.updateMany({
         where: {
           userId,
+          endedAt: null,
+          startTime: { lte: now },
+          endTime: { gte: now },
+        },
+        data: {
+          endedAt: now,
+          endReason: 'cancelled_by_host',
         },
       });
-      console.log('[StatusService] Deleted', deletedCount.count, 'statuses for user:', userId);
-      return { deletedCount: deletedCount.count };
+      console.log('[StatusService] Soft-ended', result.count, 'statuses for user:', userId);
+      return { deletedCount: result.count };
     } catch (error: any) {
-      console.error('[StatusService] Error deleting status:', error);
+      console.error('[StatusService] Error soft-ending status:', error);
       throw error;
     }
   }
 
   /**
-   * Cleanup expired statuses for all users
-   * Runs every 15 minutes via cron job
+   * Soft-end expired statuses for all users (set endedAt, endReason = 'expired').
+   * Runs every 15 minutes via cron job.
    */
   @Cron('*/15 * * * *', { name: 'cleanup-expired-statuses' }) // Every 15 minutes
   async cleanupExpiredStatuses() {
     try {
       const now = new Date();
-      const deletedCount = await prisma.status.deleteMany({
+      const result = await prisma.status.updateMany({
         where: {
           endTime: { lt: now },
+          endedAt: null,
+        },
+        data: {
+          endedAt: now,
+          endReason: 'expired',
         },
       });
-      console.log('[StatusService] Cleanup: Deleted', deletedCount.count, 'expired statuses');
-      return { deletedCount: deletedCount.count };
+      console.log('[StatusService] Cleanup: Soft-ended', result.count, 'expired statuses');
+      return { count: result.count };
     } catch (error: any) {
       console.error('[StatusService] Error in cleanup job:', error);
       // Don't throw - we don't want cron job failures to crash the app
+    }
+  }
+
+  /**
+   * Get statuses where current user was on their way and the status has ended.
+   * For endReason === 'cancelled_by_host', exclude statuses the user has already acknowledged.
+   * Include host user for display ("Name has cancelled their hang").
+   */
+  async getEndedAttendances(userId: string) {
+    try {
+      const statuses = await prisma.status.findMany({
+        where: {
+          onMyWayUserIds: { has: userId },
+          endedAt: { not: null },
+          endReason: { not: null },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: { endedAt: 'desc' },
+      });
+      // Exclude cancelled_by_host that user has already acknowledged (Prisma has no "array does not contain")
+      return statuses.filter(
+        (s) => s.endReason !== 'cancelled_by_host' || !(s.acknowledgedByUserIds ?? []).includes(userId)
+      );
+    } catch (error: any) {
+      console.error('[StatusService] Error getEndedAttendances:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Add current user to acknowledgedByUserIds for a status (dismiss "host cancelled" message).
+   * Validates: user was in onMyWayUserIds, status is ended with cancelled_by_host.
+   */
+  async acknowledgeCancelled(userId: string, statusId: string) {
+    const status = await prisma.status.findUnique({
+      where: { id: statusId },
+    });
+    if (!status) {
+      throw new HttpException('Status not found', HttpStatus.NOT_FOUND);
+    }
+    if (status.endReason !== 'cancelled_by_host' || !status.endedAt) {
+      throw new HttpException('Status was not cancelled by host', HttpStatus.BAD_REQUEST);
+    }
+    if (!status.onMyWayUserIds?.includes(userId)) {
+      throw new HttpException('You were not on your way to this status', HttpStatus.FORBIDDEN);
+    }
+    const current = status.acknowledgedByUserIds ?? [];
+    if (current.includes(userId)) {
+      return prisma.status.findUnique({ where: { id: statusId }, include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } } });
+    }
+    return prisma.status.update({
+      where: { id: statusId },
+      data: { acknowledgedByUserIds: [...current, userId] },
+      include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    });
+  }
+
+  /**
+   * Physically delete statuses that ended more than 8 hours ago (keep table bounded).
+   * Runs every 15 minutes via cron job.
+   */
+  @Cron('*/15 * * * *', { name: 'cleanup-ended-statuses' })
+  async cleanupEndedStatuses() {
+    try {
+      const cutoff = new Date(Date.now() - 8 * 60 * 60 * 1000);
+      const result = await prisma.status.deleteMany({
+        where: {
+          endedAt: { not: null, lt: cutoff },
+        },
+      });
+      if (result.count > 0) {
+        console.log('[StatusService] Cleanup: Deleted', result.count, 'old ended statuses');
+      }
+      return { count: result.count };
+    } catch (error: any) {
+      console.error('[StatusService] Error in cleanupEndedStatuses:', error);
     }
   }
 }

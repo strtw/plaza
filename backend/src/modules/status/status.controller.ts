@@ -74,6 +74,17 @@ export class StatusController {
     }
   }
 
+  @Get('me/ended-attendances')
+  async getEndedAttendances(@Request() req) {
+    try {
+      const databaseUserId = await this.getDatabaseUserId(req.userId);
+      return await this.statusService.getEndedAttendances(databaseUserId);
+    } catch (error: any) {
+      console.error('Error in getEndedAttendances controller:', error);
+      return [];
+    }
+  }
+
   @Get('friends')
   async getFriendsStatuses(@Request() req) {
     try {
@@ -131,6 +142,19 @@ export class StatusController {
     } catch (error: any) {
       throw new HttpException(
         error?.message ?? 'Failed to cancel on my way',
+        error?.status ?? HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post(':statusId/acknowledge-cancelled')
+  async acknowledgeCancelled(@Request() req, @Param('statusId') statusId: string) {
+    try {
+      const databaseUserId = await this.getDatabaseUserId(req.userId);
+      return await this.statusService.acknowledgeCancelled(databaseUserId, statusId);
+    } catch (error: any) {
+      throw new HttpException(
+        error?.message ?? 'Failed to acknowledge cancelled',
         error?.status ?? HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

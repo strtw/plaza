@@ -369,22 +369,25 @@ export class DevService {
         try {
           const now = new Date();
           
-          // Check if user has existing ACTIVE status (within time window)
+          // Check if user has existing ACTIVE status (within time window, not soft-ended)
           const existingStatus = await prisma.status.findFirst({
             where: {
               userId: user.id,
+              endedAt: null,
               startTime: { lte: now },
               endTime: { gte: now },
             },
             orderBy: { createdAt: 'desc' },
           });
 
-          // Delete expired statuses first (maintains one-status-per-user rule)
-          await prisma.status.deleteMany({
+          // Soft-end expired statuses first (maintains one-status-per-user rule, matches status.service)
+          await prisma.status.updateMany({
             where: {
               userId: user.id,
               endTime: { lt: now },
+              endedAt: null,
             },
+            data: { endedAt: now, endReason: 'expired' },
           });
 
           // Random action: 40% set, 30% update, 30% clear
@@ -433,11 +436,12 @@ export class DevService {
               console.log(`[DevService] Set status for user ${user.id}: "${randomMessage}" at ${randomLocation}`);
             }
           } else if (action === 'clear' && existingStatus) {
-            // Clear status (delete it)
-            await prisma.status.deleteMany({
-              where: { userId: user.id },
+            // Soft-end status (set endedAt, endReason = 'cancelled_by_host') so "host cancelled" shows for users on their way
+            await prisma.status.update({
+              where: { id: existingStatus.id },
+              data: { endedAt: now, endReason: 'cancelled_by_host' },
             });
-            console.log(`[DevService] Cleared status for user ${user.id}`);
+            console.log(`[DevService] Cleared status for user ${user.id} (soft-ended)`);
           } else {
             // No-op: clear requested but no status exists, or update requested but no status exists
             console.log(`[DevService] Skipped ${action} for user ${user.id} (no active status exists)`);

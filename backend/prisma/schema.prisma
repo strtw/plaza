@@ -88,6 +88,9 @@ model Status {
   endTime    DateTime
   sharedWith       String[]   @default([]) // Array of user IDs who receive this status
   onMyWayUserIds   String[]   @default([]) // User IDs who tapped "On my way"
+  endedAt         DateTime?  // When status was ended (soft-end)
+  endReason       String?    // 'cancelled_by_host' | 'expired'
+  acknowledgedByUserIds String[] @default([]) // User IDs who dismissed "host cancelled" message
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 

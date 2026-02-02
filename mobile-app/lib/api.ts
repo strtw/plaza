@@ -162,6 +162,11 @@ export const createApi = (getToken: () => Promise<string | null>) => {
       fetchApi(`/status/${encodeURIComponent(statusId)}/on-my-way`, {
         method: 'DELETE',
       }),
+    getEndedAttendances: () => fetchApi('/status/me/ended-attendances'),
+    acknowledgeCancelled: (statusId: string) =>
+      fetchApi(`/status/${encodeURIComponent(statusId)}/acknowledge-cancelled`, {
+        method: 'POST',
+      }),
     generateInvite: () =>
       fetchApi('/invites/generate', { method: 'POST' }),
     getInvite: (code: string) => fetchApi(`/invites/${code}`),
