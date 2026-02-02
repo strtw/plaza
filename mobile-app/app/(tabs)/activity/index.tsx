@@ -1212,6 +1212,7 @@ function ActivityScreenContent() {
         <Pressable
           style={[
             styles.myStatusRowContainer,
+            recentCancelledByHost && styles.myStatusRowContainerAlert,
             !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowContainerDisabled
           ]}
           onPress={() => {
@@ -1272,7 +1273,17 @@ function ActivityScreenContent() {
                 </View>
               </View>
               <View style={styles.myStatusRowRightIcons}>
-                {!recentCancelledByHost && statusState === 'expired' && storeStatus?.endTime ? (
+                {recentCancelledByHost ? (
+                  <Pressable
+                    style={styles.myStatusRowAddStatusPill}
+                    onPress={() => {
+                      acknowledgeCancelledMutation.mutate(recentCancelledByHost.id);
+                      router.push('/(tabs)/activity/set-status');
+                    }}
+                  >
+                    <Text style={styles.myStatusRowAddStatusPillText}>Set status</Text>
+                  </Pressable>
+                ) : !recentCancelledByHost && statusState === 'expired' && storeStatus?.endTime ? (
                   <View style={[styles.myStatusRowTimeBubble, styles.myStatusRowExpiredBubble]}>
                     <Text style={styles.myStatusRowTimeBubbleText}>expired</Text>
                   </View>
@@ -1924,6 +1935,11 @@ const styles = StyleSheet.create({
   myStatusRowContainerDisabled: {
     backgroundColor: '#E8E8E8',
     opacity: 0.85,
+  },
+  myStatusRowContainerAlert: {
+    backgroundColor: '#FFF8E1',
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
   },
   myStatusRowAvatarContainer: {
     position: 'relative',
