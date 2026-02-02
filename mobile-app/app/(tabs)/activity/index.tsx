@@ -289,6 +289,9 @@ function ActivityScreenContent() {
   // Track which row is currently swiped open (only one at a time)
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
+  // When attending a status, show "updates paused" view; user can unpause to see feed again (FE only)
+  const [unpausedWhileAttending, setUnpausedWhileAttending] = useState(false);
+
   // Track locally muted contacts for immediate UI updates (before query refetch)
   const [locallyMutedContacts, setLocallyMutedContacts] = useState<Set<string>>(new Set());
 
@@ -398,6 +401,14 @@ function ActivityScreenContent() {
   const recentCancelledByHost = endedAttendances?.find((a: any) => a.endReason === 'cancelled_by_host') ?? null;
 
   const onMyWayToStatus = (currentUser?.id && statuses?.find((s: any) => s.onMyWayUserIds?.includes(currentUser.id))) ?? null;
+
+  // Only show "host cancelled" when not currently attending another event (so new event takes priority)
+  const showHostCancelled = recentCancelledByHost && !onMyWayToStatus;
+
+  // Reset unpaused state when user is no longer attending
+  useEffect(() => {
+    if (!onMyWayToStatus) setUnpausedWhileAttending(false);
+  }, [onMyWayToStatus]);
 
   // Sync API response to store
   useEffect(() => {
@@ -1210,14 +1221,14 @@ function ActivityScreenContent() {
       </View>
       <Animated.View style={{ opacity: Animated.multiply(statusFadeAnim, statusGrayAnim) }}>
         <Pressable
-          style={[
+            style={[
             styles.myStatusRowContainer,
-            recentCancelledByHost && styles.myStatusRowContainerAlert,
-            !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowContainerDisabled
+            showHostCancelled && styles.myStatusRowContainerAlert,
+            !showHostCancelled && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowContainerDisabled
           ]}
           onPress={() => {
-            if (recentCancelledByHost) {
-              acknowledgeCancelledMutation.mutate(recentCancelledByHost.id);
+            if (showHostCancelled) {
+              acknowledgeCancelledMutation.mutate(recentCancelledByHost!.id);
               router.push('/(tabs)/activity/set-status');
               return;
             }
@@ -1236,13 +1247,13 @@ function ActivityScreenContent() {
           <View style={styles.myStatusRowAvatarContainer}>
                 <View style={[
               styles.myStatusRowAvatar,
-              !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared')
+              !showHostCancelled && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared')
                 ? styles.avatarDisabled
                 : { backgroundColor: '#E5E5E5' }
             ]}>
               <Text style={[
                 styles.avatarText,
-                !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.avatarTextDisabled
+                !showHostCancelled && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.avatarTextDisabled
               ]}>{getInitials()}</Text>
             </View>
           </View>
@@ -1251,15 +1262,15 @@ function ActivityScreenContent() {
               <View style={styles.myStatusRowNameAndStatus}>
                 <Text style={[
                   styles.myStatusRowName,
-                  !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowNameDisabled
+                  !showHostCancelled && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowNameDisabled
                 ]} numberOfLines={1}>You</Text>
                 <View style={styles.myStatusRowMessageRow}>
                   <Text style={[
                     styles.myStatusRowMessage,
-                    !recentCancelledByHost && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowMessageDisabled
+                    !showHostCancelled && !onMyWayToStatus && (statusState === 'expired' || statusState === 'cleared') && styles.myStatusRowMessageDisabled
                   ]} numberOfLines={1}>
-                    {recentCancelledByHost
-                      ? `${recentCancelledByHost.user ? getFullName(recentCancelledByHost.user) : 'Someone'} has cancelled their hang`
+                    {showHostCancelled
+                      ? `${recentCancelledByHost!.user ? getFullName(recentCancelledByHost.user) : 'Someone'} has cancelled their hang`
                       : onMyWayToStatus
                         ? `You are hanging out with ${onMyWayToStatus.user ? getFullName(onMyWayToStatus.user) : 'them'}`
                         : statusState === 'cleared'
@@ -1273,35 +1284,35 @@ function ActivityScreenContent() {
                 </View>
               </View>
               <View style={styles.myStatusRowRightIcons}>
-                {recentCancelledByHost ? (
+                {showHostCancelled ? (
                   <Pressable
                     style={styles.myStatusRowAddStatusPill}
                     onPress={() => {
-                      acknowledgeCancelledMutation.mutate(recentCancelledByHost.id);
+                      acknowledgeCancelledMutation.mutate(recentCancelledByHost!.id);
                       router.push('/(tabs)/activity/set-status');
                     }}
                   >
                     <Text style={styles.myStatusRowAddStatusPillText}>Set status</Text>
                   </Pressable>
-                ) : !recentCancelledByHost && statusState === 'expired' && storeStatus?.endTime ? (
+                ) : !showHostCancelled && statusState === 'expired' && storeStatus?.endTime ? (
                   <View style={[styles.myStatusRowTimeBubble, styles.myStatusRowExpiredBubble]}>
                     <Text style={styles.myStatusRowTimeBubbleText}>expired</Text>
                   </View>
-                ) : !recentCancelledByHost && statusState === 'cleared' && storeStatus?.endTime ? (
+                ) : !showHostCancelled && statusState === 'cleared' && storeStatus?.endTime ? (
                   <View style={[styles.myStatusRowTimeBubble, styles.myStatusRowClearedBubble]}>
                     <Text style={styles.myStatusRowTimeBubbleText}>cleared</Text>
                   </View>
-                ) : !recentCancelledByHost && storeStatus?.endTime && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus) && getTimeRemaining(storeStatus.endTime) ? (
+                ) : !showHostCancelled && storeStatus?.endTime && currentStatus && !isStatusExpiredOrExpiringSoon(currentStatus) && getTimeRemaining(storeStatus.endTime) ? (
                   <View style={[styles.myStatusRowTimeBubble, { backgroundColor: '#25D366' }]}>
                     <Text style={styles.myStatusRowTimeBubbleText}>{getTimeRemaining(storeStatus.endTime)}</Text>
                   </View>
                 ) : null}
-                {!recentCancelledByHost && !onMyWayToStatus && !statusState && !storeStatus && !currentStatus && (
+                {!showHostCancelled && !onMyWayToStatus && !statusState && !storeStatus && !currentStatus && (
                   <View style={styles.myStatusRowAddStatusPill}>
                     <Text style={styles.myStatusRowAddStatusPillText}>+ Add status</Text>
                   </View>
                 )}
-                {!recentCancelledByHost && storeStatus?.location && (statusState !== 'expired' && statusState !== 'cleared') && (
+                {!showHostCancelled && storeStatus?.location && (statusState !== 'expired' && statusState !== 'cleared') && (
                   <Ionicons
                     name={
                       storeStatus.location === StatusLocation.HOME ? 'home-outline' :
@@ -1317,6 +1328,20 @@ function ActivityScreenContent() {
           </View>
         </Pressable>
       </Animated.View>
+      {onMyWayToStatus && !unpausedWhileAttending ? (
+        <View style={styles.pausedUpdatesContainer}>
+          <Text style={styles.pausedUpdatesSubtitle}>
+            Updates paused while you and {onMyWayToStatus.user ? getFullName(onMyWayToStatus.user) : 'them'} are spending time together
+          </Text>
+          <Pressable
+            style={styles.pausedUpdatesButton}
+            onPress={() => setUnpausedWhileAttending(true)}
+          >
+            <Text style={styles.pausedUpdatesButtonText}>Unpause updates</Text>
+          </Pressable>
+          <Text style={styles.pausedUpdatesFootnote}>(FOMO is not an issue for me)</Text>
+        </View>
+      ) : (
       <FlatList
         data={activeContacts}
         keyExtractor={(item) => item.id}
@@ -1596,6 +1621,7 @@ function ActivityScreenContent() {
           </View>
         }
       />
+      )}
 
       {/* Filters Modal */}
       <Modal
@@ -1940,6 +1966,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8E1',
     borderLeftWidth: 4,
     borderLeftColor: '#FF9800',
+  },
+  pausedUpdatesContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+  },
+  pausedUpdatesTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#000',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  pausedUpdatesSubtitle: {
+    fontSize: 16,
+    color: '#667781',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  pausedUpdatesButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  pausedUpdatesButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  pausedUpdatesFootnote: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 20,
   },
   myStatusRowAvatarContainer: {
     position: 'relative',
