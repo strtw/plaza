@@ -5,6 +5,8 @@ import { useApi } from '../../lib/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFullName } from '../../lib/types';
+import { useUserStore } from '../../stores/userStore';
+import { useState } from 'react';
 
 export default function ContactDetailScreen() {
   const { id, isUpdated, previousStatus, from, groupId, firstName, lastName, name } = useLocalSearchParams<{
@@ -82,6 +84,42 @@ export default function ContactDetailScreen() {
     },
   });
 
+  const [muteTogglePending, setMuteTogglePending] = useState<boolean | null>(null);
+
+  const muteFriendMutation = useMutation({
+    mutationFn: (sharerId: string) => api.muteFriend(sharerId),
+    onSuccess: (_, sharerId) => {
+      queryClient.setQueryData(['contacts'], (old: any[] | undefined) =>
+        old ? old.map((c: any) => (c.id === sharerId ? { ...c, friendStatus: 'MUTED' } : c)) : old
+      );
+      setMuteTogglePending(null);
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
+    },
+    onError: (error: any, sharerId: string) => {
+      setMuteTogglePending(null);
+      removeLocallyMuted(sharerId);
+      Alert.alert('Error', error.message || 'Failed to mute. Please try again.');
+    },
+  });
+  const unmuteFriendMutation = useMutation({
+    mutationFn: (sharerId: string) => api.unmuteFriend(sharerId),
+    onSuccess: (_, sharerId) => {
+      queryClient.setQueryData(['contacts'], (old: any[] | undefined) =>
+        old ? old.map((c: any) => (c.id === sharerId ? { ...c, friendStatus: 'ACCEPTED' } : c)) : old
+      );
+      setMuteTogglePending(null);
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['friends-statuses'] });
+    },
+    onError: (error: any, sharerId: string) => {
+      setMuteTogglePending(null);
+      addLocallyMuted(sharerId);
+      Alert.alert('Error', error.message || 'Failed to unmute. Please try again.');
+    },
+  });
+
+  const { locallyMutedContactIds, addLocallyMuted, removeLocallyMuted } = useUserStore();
   const contact = id ? contacts?.find((c: any) => c.id === id) : null;
   const status = statuses?.find((s: any) => s.user?.id === id || s.userId === id);
   const myUserId = currentUser?.id ?? null;
@@ -222,6 +260,9 @@ export default function ContactDetailScreen() {
   };
 
   const changeMessage = getChangeMessage();
+  const canMuteUnmute = contact.friendStatus === 'ACCEPTED' || contact.friendStatus === 'MUTED';
+  const isMuted = contact.friendStatus === 'MUTED' || locallyMutedContactIds.has(contact.id);
+  const displayMuted = muteTogglePending !== null ? muteTogglePending : isMuted;
 
   return (
     <View style={{ flex: 1 }}>
@@ -244,11 +285,45 @@ export default function ContactDetailScreen() {
         </View>
       </View>
       <ScrollView style={{ flex: 1, padding: 20 }}>
-        {/* Show everyone indicator if this contact is muted */}
-        {contact.friendStatus === 'MUTED' && (
-          <View style={styles.mutedIndicator}>
-            <Ionicons name="volume-mute" size={16} color="#999" />
-            <Text style={styles.mutedText}>User's updates are muted and won't show by default in the activity feed. To see their updates, unmute them, or toggle the "show muted user updates" filter </Text>
+       
+        {/* Mute / unmute control */}
+        {canMuteUnmute && (
+          <View style={styles.muteRow}>
+            <View style={styles.muteRowLabelBlock}>
+              <View style={styles.muteRowTitleRow}>
+                <Ionicons
+                  name={displayMuted ? 'notifications-off-outline' : 'notifications-outline'}
+                  size={22}
+                  color={displayMuted ? '#666' : '#007AFF'}
+                />
+                <Text style={styles.muteRowLabel}>
+                  {displayMuted ? 'Updates muted' : 'Mute updates'}
+                </Text>
+              </View>
+              <Text style={styles.muteRowSubtext}>
+                {displayMuted
+                  ? 'Their updates are hidden by default in the activity feed'
+                  : 'Hide their updates from the activity feed by default'}
+              </Text>
+            </View>
+            <Switch
+              value={displayMuted}
+              onValueChange={() => {
+                if (muteFriendMutation.isPending || unmuteFriendMutation.isPending) return;
+                const nextMuted = !displayMuted;
+                setMuteTogglePending(nextMuted);
+                if (nextMuted) {
+                  addLocallyMuted(contact.id);
+                  muteFriendMutation.mutate(contact.id);
+                } else {
+                  removeLocallyMuted(contact.id);
+                  unmuteFriendMutation.mutate(contact.id);
+                }
+              }}
+              disabled={muteFriendMutation.isPending || unmuteFriendMutation.isPending}
+              trackColor={{ false: '#e0e0e0', true: '#007AFF' }}
+              thumbColor="#fff"
+            />
           </View>
         )}
         {status ? (
@@ -469,6 +544,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     fontStyle: 'italic',
+  },
+  muteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 0,
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  muteRowLabelBlock: {
+    flex: 1,
+    marginRight: 12,
+  },
+  muteRowTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  muteRowLabel: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '600',
+  },
+  muteRowSubtext: {
+    fontSize: 13,
+    color: '#666',
   },
   onMyWayButtonWrap: {
     marginTop: 20,

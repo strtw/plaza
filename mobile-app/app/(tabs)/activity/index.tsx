@@ -1,4 +1,4 @@
-import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, Easing, LayoutAnimation, UIManager, PanResponder, Switch } from 'react-native';
+import { View, FlatList, Text, RefreshControl, ActivityIndicator, StyleSheet, Modal, TextInput, Pressable, ScrollView, Alert, Platform, Animated, Easing, LayoutAnimation, UIManager, Switch } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createApi } from '../../../lib/api';
 import { ContactListItem } from '../../../components/ContactListItem';
@@ -56,177 +56,6 @@ const AnimatedContactListItem = ({ contact, previousStatus }: { contact: any; pr
   );
 };
 
-// Swipeable wrapper component for contact items with mute action
-const SwipeableContactListItem = ({ 
-  contact, 
-  previousStatus, 
-  onMute,
-  isNew = false,
-  isUpdated = false,
-  openRowId,
-  setOpenRowId,
-  locallyMutedContacts,
-}: { 
-  contact: any; 
-  previousStatus?: any;
-  onMute: (contactId: string) => void;
-  isNew?: boolean;
-  isUpdated?: boolean;
-  openRowId: string | null;
-  setOpenRowId: (id: string | null) => void;
-  locallyMutedContacts: Set<string>;
-}) => {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const currentTranslateX = useRef(0);
-  const SWIPE_THRESHOLD = -60; // Swipe left threshold to reveal
-  const ACTION_WIDTH = 80; // Width of the action button
-  // Check both friendStatus and locallyMutedContacts for immediate UI updates
-  const isMuted = contact?.friendStatus === 'MUTED' || locallyMutedContacts.has(contact.id);
-  const isOpen = openRowId === contact.id;
-
-  // Track current translateX value
-  useEffect(() => {
-    const listener = translateX.addListener(({ value }) => {
-      currentTranslateX.current = value;
-    });
-    return () => {
-      translateX.removeListener(listener);
-    };
-  }, [translateX]);
-
-  // Close this row if another row is opened
-  useEffect(() => {
-    if (openRowId && openRowId !== contact.id) {
-      currentTranslateX.current = 0;
-      Animated.spring(translateX, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 7,
-      }).start();
-    }
-  }, [openRowId, contact.id, translateX]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
-      },
-      onPanResponderGrant: () => {
-        translateX.stopAnimation();
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0) {
-          // Swiping left - reveal action
-          const newValue = Math.max(gestureState.dx, -ACTION_WIDTH);
-          translateX.setValue(newValue);
-          currentTranslateX.current = newValue;
-        } else if (gestureState.dx > 0) {
-          // Swiping right - hide action (if already open)
-          if (currentTranslateX.current < 0) {
-            const newValue = Math.min(currentTranslateX.current + gestureState.dx, 0);
-            translateX.setValue(newValue);
-            currentTranslateX.current = newValue;
-          }
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const currentValue = currentTranslateX.current;
-        if (gestureState.dx < SWIPE_THRESHOLD || (currentValue < SWIPE_THRESHOLD && gestureState.dx < 0)) {
-          setOpenRowId(contact.id);
-          Animated.spring(translateX, {
-            toValue: -ACTION_WIDTH,
-            useNativeDriver: true,
-            tension: 50,
-            friction: 7,
-          }).start(() => {
-            currentTranslateX.current = -ACTION_WIDTH;
-          });
-        } else {
-          setOpenRowId(null);
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 50,
-            friction: 7,
-          }).start(() => {
-            currentTranslateX.current = 0;
-          });
-        }
-      },
-    })
-  ).current;
-
-  const handleMute = () => {
-    onMute(contact.id);
-    setOpenRowId(null);
-    // Close the swipe after muting
-    Animated.spring(translateX, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 50,
-      friction: 7,
-    }).start(() => {
-      currentTranslateX.current = 0;
-    });
-  };
-
-  return (
-    <View style={{ position: 'relative', overflow: 'hidden' }}>
-      {/* Background action button (always present, revealed by swipe) */}
-      <View
-        style={{
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: ACTION_WIDTH,
-          backgroundColor: isMuted ? '#666' : '#999',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 0,
-        }}
-      >
-        <Pressable
-          onPress={handleMute}
-          style={{
-            width: '100%',
-            height: '100%',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-            <Ionicons 
-              name={isMuted ? "eye-off" : "eye"} 
-              size={24} 
-              color="#fff" 
-            />
-        </Pressable>
-      </View>
-      
-      {/* Swipeable content */}
-      <Animated.View
-        style={{
-          transform: [{ translateX }],
-          backgroundColor: '#fff',
-          zIndex: 1,
-        }}
-        {...panResponder.panHandlers}
-      >
-        <ContactListItem 
-          contact={contact}
-          isNew={isNew}
-          isUpdated={isUpdated}
-          previousStatus={previousStatus}
-          statusState={contact.statusState}
-          textFadeAnim={contact.textFadeAnim}
-        />
-      </Animated.View>
-    </View>
-  );
-};
-
 // Helper function to round time to nearest 15 minutes
 const roundToNearest15Minutes = (date: Date): Date => {
   const rounded = new Date(date);
@@ -274,8 +103,9 @@ function ActivityScreenContent() {
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { currentStatus: storeStatus, setCurrentStatus } = useUserStore();
-  
+  const { currentStatus: storeStatus, setCurrentStatus, locallyMutedContactIds, setLocallyMutedContactIds } = useUserStore();
+  const locallyMutedContacts = locallyMutedContactIds;
+
   // Track status state: 'active' | 'expired' | 'cleared' | null
   // 'expired': Status expired naturally (endTime passed)
   // 'cleared': User manually cleared the status
@@ -286,14 +116,8 @@ function ActivityScreenContent() {
   // Fade-to-gray animation for when status expires/clears (opacity transition)
   const statusGrayAnim = useRef(new Animated.Value(1)).current;
   
-  // Track which row is currently swiped open (only one at a time)
-  const [openRowId, setOpenRowId] = useState<string | null>(null);
-
   // When attending a status, show "updates paused" view; user can unpause to see feed again (FE only)
   const [unpausedWhileAttending, setUnpausedWhileAttending] = useState(false);
-
-  // Track locally muted contacts for immediate UI updates (before query refetch)
-  const [locallyMutedContacts, setLocallyMutedContacts] = useState<Set<string>>(new Set());
 
   // Set-status is now a route; no modal state here
 
@@ -471,100 +295,13 @@ function ActivityScreenContent() {
 
   // createStatusMutation and deleteStatusMutation live in set-status screen
 
-  // Mutation for muting a friend
-  const muteFriendMutation = useMutation({
-    mutationFn: api.muteFriend,
-    onSuccess: (_, contactId) => {
-      // Configure layout animation for smooth row removal
-      LayoutAnimation.configureNext({
-        duration: 300,
-        create: {
-          type: LayoutAnimation.Types.easeInEaseOut,
-          property: LayoutAnimation.Properties.opacity,
-        },
-        update: {
-          type: LayoutAnimation.Types.easeInEaseOut,
-        },
-        delete: {
-          type: LayoutAnimation.Types.easeInEaseOut,
-          property: LayoutAnimation.Properties.opacity,
-        },
-      });
-      
-      // Immediately update local state to hide the contact
-      setLocallyMutedContacts(prev => new Set(prev).add(contactId));
-      queryClient.invalidateQueries({ queryKey: ['contacts', 'friends-statuses'] });
-    },
-    onError: (error: any) => {
-      console.error('Error muting friend:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to mute friend. Please try again.',
-        [{ text: 'OK' }]
-      );
-    },
-  });
-
-  // Mutation for unmuting a friend
-  const unmuteFriendMutation = useMutation({
-    mutationFn: api.unmuteFriend,
-    onSuccess: (_, contactId) => {
-      // Configure layout animation for smooth row insertion
-      LayoutAnimation.configureNext({
-        duration: 300,
-        create: {
-          type: LayoutAnimation.Types.easeInEaseOut,
-          property: LayoutAnimation.Properties.opacity,
-        },
-        update: {
-          type: LayoutAnimation.Types.easeInEaseOut,
-        },
-        delete: {
-          type: LayoutAnimation.Types.easeInEaseOut,
-          property: LayoutAnimation.Properties.opacity,
-        },
-      });
-      
-      // Immediately update local state to show the contact
-      setLocallyMutedContacts(prev => {
-        const next = new Set(prev);
-        next.delete(contactId);
-        return next;
-      });
-      queryClient.invalidateQueries({ queryKey: ['contacts', 'friends-statuses'] });
-    },
-    onError: (error: any) => {
-      console.error('Error unmuting friend:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to unmute friend. Please try again.',
-        [{ text: 'OK' }]
-      );
-    },
-  });
-
-  const handleMuteFriend = (contactId: string) => {
-    const contact = contacts?.find((c: any) => c.id === contactId);
-    // Check both the contact's friendStatus and local state
-    const isMuted = contact?.friendStatus === 'MUTED' || locallyMutedContacts.has(contactId);
-    
-    if (isMuted) {
-      unmuteFriendMutation.mutate(contactId);
-    } else {
-      muteFriendMutation.mutate(contactId);
-    }
-  };
-  
-  // Sync locallyMutedContacts with contacts data when it updates
+  // Sync store with contacts when it updates (source of truth after refetch)
   useEffect(() => {
     if (contacts) {
-      // Update local state to match contacts data (in case of external changes)
-      const mutedContactIds = contacts
-        .filter((c: any) => c.friendStatus === 'MUTED')
-        .map((c: any) => c.id);
-      setLocallyMutedContacts(new Set(mutedContactIds));
+      const mutedIds = contacts.filter((c: any) => c.friendStatus === 'MUTED').map((c: any) => c.id);
+      setLocallyMutedContactIds(new Set(mutedIds));
     }
-  }, [contacts]);
+  }, [contacts, setLocallyMutedContactIds]);
 
   // Calculate header padding
   const headerPaddingTop = insets.top + 16;
@@ -1393,27 +1130,26 @@ function ActivityScreenContent() {
             textFadeAnim, // Pass text fade animation for cleared statuses
           };
           
+          const isMuted = contactWithStatusState?.friendStatus === 'MUTED' || locallyMutedContacts.has(contactWithStatusState?.id);
           const content = item.isNewOrChanged ? (
-            <SwipeableContactListItem 
-              contact={contactWithStatusState} 
+            <ContactListItem
+              contact={contactWithStatusState}
               isNew={item.isNew}
               isUpdated={item.isUpdated}
               previousStatus={item.previousStatus || item.previousStatus}
-              onMute={handleMuteFriend}
-              openRowId={openRowId}
-              setOpenRowId={setOpenRowId}
-              locallyMutedContacts={locallyMutedContacts}
+              statusState={item.statusState}
+              textFadeAnim={textFadeAnim}
+              isMuted={isMuted}
             />
           ) : (
-            <SwipeableContactListItem 
-              contact={contactWithStatusState} 
+            <ContactListItem
+              contact={contactWithStatusState}
               isNew={item.isNew}
               isUpdated={item.isUpdated}
               previousStatus={item.previousStatus}
-              onMute={handleMuteFriend}
-              openRowId={openRowId}
-              setOpenRowId={setOpenRowId}
-              locallyMutedContacts={locallyMutedContacts}
+              statusState={item.statusState}
+              textFadeAnim={textFadeAnim}
+              isMuted={isMuted}
             />
           );
 

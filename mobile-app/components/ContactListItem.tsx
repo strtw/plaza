@@ -11,9 +11,12 @@ interface Props {
   previousStatus?: any; // Previous status data for comparison (only when isUpdated is true)
   statusState?: 'expired' | 'cleared' | null; // Status state for grayed-out display
   textFadeAnim?: Animated.Value | null; // Animation for text fade when status is cleared
+  /** When true, show muted bell icon (e.g. from optimistic store). Falls back to contact.friendStatus === 'MUTED' if not passed. */
+  isMuted?: boolean;
 }
 
-export function ContactListItem({ contact, isNew = false, isUpdated = false, previousStatus, statusState = null, textFadeAnim = null }: Props) {
+export function ContactListItem({ contact, isNew = false, isUpdated = false, previousStatus, statusState = null, textFadeAnim = null, isMuted: isMutedProp }: Props) {
+  const isMuted = isMutedProp ?? contact.friendStatus === 'MUTED';
   const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -233,7 +236,7 @@ export function ContactListItem({ contact, isNew = false, isUpdated = false, pre
           </View>
           <View style={styles.rightIcons}>
             {/* Mute bell icon for muted users - positioned left of time remaining */}
-            {contact.friendStatus === 'MUTED' && !isExpiredOrCleared && (
+            {isMuted && !isExpiredOrCleared && (
               <Ionicons 
                 name="notifications-off" 
                 size={16} 
