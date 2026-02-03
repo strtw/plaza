@@ -21,3 +21,13 @@
 **Related Files**:
 - `mobile-app/app/(tabs)/contacts.tsx` - Contacts tab display
 - `mobile-app/app/(tabs)/activity.tsx` - Activity tab (shows statuses from people who added you)
+
+
+STATUS setting:
+- 
+
+- Consider a FOMO setting where if I set an event I can't see others events until my event is done
+
+- FOMO might also be where if you are attending an event, you mark it as attended when you are on your way or there, and then to see more events you have to leave the event? this introduces complexity. 
+
+- - Invitations - once you set a status and invite people you can't remove people. You can only add more within the rough group size e.g. if it's "large group" and you invite 8 people you can add up to 4 more to get to twelve. But no more. This is to preserve invitee  expectations.

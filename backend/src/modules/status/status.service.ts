@@ -75,9 +75,48 @@ export class StatusService {
         endTime: new Date(dto.endTime),
         sharedWith: filteredSharedWith, // Store filtered sharedWith array
       };
-      
+
+      const hasAttendees = (existingStatus?.onMyWayUserIds?.length ?? 0) > 0;
+
       if (existingStatus) {
-        // UPDATE existing active status (preserves id and createdAt, updates updatedAt)
+        if (hasAttendees) {
+          // When attendees exist: only allow message, endTime (extend only), and sharedWith (add-only)
+          const newEndTime = new Date(dto.endTime);
+          const currentEndTime = new Date(existingStatus.endTime);
+          if (newEndTime.getTime() < currentEndTime.getTime()) {
+            throw new HttpException(
+              'When people are attending, you can only extend the end time, not shorten it.',
+              HttpStatus.BAD_REQUEST
+            );
+          }
+          if (newEndTime.getTime() < now.getTime()) {
+            throw new HttpException(
+              'End time must be in the future.',
+              HttpStatus.BAD_REQUEST
+            );
+          }
+          // sharedWith: merge existing + new (add-only; filter blocked and cap 100)
+          const blockedForMerge = await prisma.friend.findMany({
+            where: { friendUserId: userId, status: FriendStatus.BLOCKED },
+            select: { userId: true },
+          });
+          const blockedSet = new Set(blockedForMerge.map(f => f.userId));
+          const mergedSharedWith = [...new Set([...(existingStatus.sharedWith ?? []), ...filteredSharedWith])];
+          const mergedFiltered = mergedSharedWith.filter(id => !blockedSet.has(id));
+          const sharedWithCapped =
+            mergedFiltered.length > 100 ? mergedFiltered.slice(0, 100) : mergedFiltered;
+
+          console.log('[StatusService] Updating existing status with attendees: only message, endTime, sharedWith (add-only)');
+          return await prisma.status.update({
+            where: { id: existingStatus.id },
+            data: {
+              message: dto.message,
+              endTime: newEndTime,
+              sharedWith: sharedWithCapped,
+            },
+          });
+        }
+        // UPDATE existing active status (no attendees): full update
         console.log('[StatusService] Updating existing status with id:', existingStatus.id);
         return await prisma.status.update({
           where: { id: existingStatus.id },

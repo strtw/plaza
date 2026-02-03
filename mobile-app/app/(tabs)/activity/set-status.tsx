@@ -72,6 +72,12 @@ export default function SetStatusScreen() {
     enabled: isLoaded && isSignedIn,
   });
 
+  const hasAttendees = (currentStatus?.onMyWayUserIds?.length ?? 0) > 0;
+  const minEndTime =
+    hasAttendees && currentStatus?.endTime
+      ? new Date(Math.max(Date.now(), new Date(currentStatus.endTime).getTime()))
+      : null;
+
   const { data: contacts } = useQuery({
     queryKey: ['contacts'],
     queryFn: api.getContacts,
@@ -127,24 +133,38 @@ export default function SetStatusScreen() {
       'greenspace': 'GREENSPACE',
       'third-place': 'THIRD_PLACE',
     };
-    createStatusMutation.mutate({
-      status: AvailabilityStatus.AVAILABLE,
-      message: message.trim(),
-      location: locationMap[location],
-      startTime: new Date().toISOString(),
-      endTime: endTime.toISOString(),
-      sharedWith: selectedInviteeIds,
-    });
+    const payload = hasAttendees && currentStatus
+      ? {
+          status: AvailabilityStatus.AVAILABLE,
+          message: message.trim(),
+          location: currentStatus.location,
+          startTime: currentStatus.startTime,
+          endTime: endTime.toISOString(),
+          sharedWith: selectedInviteeIds,
+        }
+      : {
+          status: AvailabilityStatus.AVAILABLE,
+          message: message.trim(),
+          location: locationMap[location!],
+          startTime: new Date().toISOString(),
+          endTime: endTime.toISOString(),
+          sharedWith: selectedInviteeIds,
+        };
+    createStatusMutation.mutate(payload);
   };
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
+    if (!selectedDate) return;
+    const rounded = roundToNearest15Minutes(selectedDate);
+    const clamped =
+      minEndTime && rounded.getTime() < minEndTime.getTime() ? minEndTime : rounded;
     if (Platform.OS === 'ios') {
-      if (event.type === 'set' && selectedDate) {
-        setEndTime(roundToNearest15Minutes(selectedDate));
+      if (event.type === 'set') {
+        setEndTime(clamped);
         setTimeTouched(true);
       }
-    } else if (selectedDate) {
-      setEndTime(roundToNearest15Minutes(selectedDate));
+    } else {
+      setEndTime(clamped);
       setTimeTouched(true);
     }
   };
@@ -176,7 +196,7 @@ export default function SetStatusScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.closeButton}>
-          <Ionicons name="close" size={28} color="#000" />
+          <Ionicons name="close" size={28} color="#007AFF" />
         </Pressable>
         <Text style={styles.headerTitle}>
           {isEditing ? 'Edit your status' : 'Set your status'}
@@ -199,7 +219,8 @@ export default function SetStatusScreen() {
           </Text>
         </Pressable>
       </View>
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        <View style={styles.card}>
         <View style={styles.messageContainer}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>Message</Text>
@@ -225,50 +246,65 @@ export default function SetStatusScreen() {
         <View style={styles.locationContainer}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>Location</Text>
-            <Text style={styles.requiredIndicator}>Required</Text>
+            {!hasAttendees && <Text style={styles.requiredIndicator}>Required</Text>}
           </View>
-          <View style={styles.locationSelectorContainer}>
-            <Pressable
-              style={[
-                styles.locationOption,
-                location === 'home' && styles.locationOptionSelected,
-                !location && styles.locationOptionIncomplete,
-              ]}
-              onPress={() => setLocation('home')}
-            >
-              <Ionicons name="home-outline" size={24} color={location === 'home' ? '#007AFF' : '#666'} />
-              <Text style={[styles.locationOptionText, location === 'home' && styles.locationOptionTextSelected]}>
-                Home
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.locationOption,
-                location === 'greenspace' && styles.locationOptionSelected,
-                !location && styles.locationOptionIncomplete,
-              ]}
-              onPress={() => setLocation('greenspace')}
-            >
-              <Ionicons name="leaf" size={24} color={location === 'greenspace' ? '#007AFF' : '#666'} />
-              <Text style={[styles.locationOptionText, location === 'greenspace' && styles.locationOptionTextSelected]}>
-                Greenspace
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.locationOption,
-                location === 'third-place' && styles.locationOptionSelected,
-                !location && styles.locationOptionIncomplete,
-              ]}
-              onPress={() => setLocation('third-place')}
-            >
-              <Ionicons name="business" size={24} color={location === 'third-place' ? '#007AFF' : '#666'} />
-              <Text style={[styles.locationOptionText, location === 'third-place' && styles.locationOptionTextSelected]}>
-                Third Place
-              </Text>
-            </Pressable>
-          </View>
-          {!location && <Text style={styles.helperText}>Select where you'll be</Text>}
+          {hasAttendees && location ? (
+            <View>
+              <View style={styles.locationReadOnly}>
+                <Ionicons name="lock-closed" size={20} color="#666" />
+                <Text style={styles.locationReadOnlyText}>
+                  {location === 'home' ? 'Home' : location === 'greenspace' ? 'Greenspace' : 'Third Place'}
+                </Text>
+              </View>
+              <Text style={[styles.helperText, { marginTop: 8 }]}>Can't change when people are attending</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.locationSelectorContainer}>
+                <Pressable
+                  style={[
+                    styles.locationOption,
+                    location === 'home' && styles.locationOptionSelected,
+                    !location && styles.locationOptionIncomplete,
+                  ]}
+                  onPress={() => setLocation('home')}
+                >
+                  <Ionicons name="home-outline" size={24} color={location === 'home' ? '#007AFF' : '#666'} />
+                  <Text style={[styles.locationOptionText, location === 'home' && styles.locationOptionTextSelected]}>
+                   My Place
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.locationOption,
+                    location === 'greenspace' && styles.locationOptionSelected,
+                    !location && styles.locationOptionIncomplete,
+                  ]}
+                  onPress={() => setLocation('greenspace')}
+                >
+                  <Ionicons name="leaf" size={24} color={location === 'greenspace' ? '#007AFF' : '#666'} />
+                  <Text style={[styles.locationOptionText, location === 'greenspace' && styles.locationOptionTextSelected]}>
+                    Greenspace{' '}
+                    <Text style={styles.locationOptionSubtext}>(park, trail, beach etc.)</Text>
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.locationOption,
+                    location === 'third-place' && styles.locationOptionSelected,
+                    !location && styles.locationOptionIncomplete,
+                  ]}
+                  onPress={() => setLocation('third-place')}
+                >
+                  <Ionicons name="business" size={24} color={location === 'third-place' ? '#007AFF' : '#666'} />
+                  <Text style={[styles.locationOptionText, location === 'third-place' && styles.locationOptionTextSelected]}>
+                    Third Place{' '}
+                    <Text style={styles.locationOptionSubtext}>(cafe, museum, town square etc. )</Text>
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          )}
         </View>
 
         <View style={styles.timeContainer}>
@@ -276,6 +312,11 @@ export default function SetStatusScreen() {
             <Text style={styles.sectionLabel}>I'm available until:</Text>
             <Text style={styles.requiredIndicator}>Required</Text>
           </View>
+          {hasAttendees && (
+            <Text style={[styles.helperText, { marginBottom: 8 }]}>
+              You can only extend the end time when people are attending
+            </Text>
+          )}
           <Pressable
             style={[styles.timePickerContainer, !timeTouched && styles.timePickerContainerIncomplete]}
             onPress={() => setTimeTouched(true)}
@@ -297,42 +338,47 @@ export default function SetStatusScreen() {
               />
             )}
           </Pressable>
-          {!timeTouched && (
-            <Text style={styles.helperText}>Tap the time selector to continue</Text>
-          )}
+       
         </View>
 
         <View style={styles.tellFriendsContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>Add some friends:</Text>
             <Text style={styles.requiredIndicator}>Required</Text>
           </View>
           <Pressable style={styles.tellFriendsButton} onPress={() => setShowInviteesModal(true)}>
-            <Ionicons name="add" size={28} color="#007AFF" />
-            <Ionicons name="people" size={28} color="#007AFF" />
-            {lastAddFriendsCount > 0 && (
-              <Text style={styles.tellFriendsCount}>({lastAddFriendsCount})</Text>
-            )}
+            <Ionicons name="add" size={22} color="#007AFF" />
+            <Ionicons name="people" size={22} color="#007AFF" />
+            <Text style={styles.tellFriendsButtonText}>
+              Add some friends{lastAddFriendsCount > 0 ? ` (${lastAddFriendsCount})` : ''}
+            </Text>
           </Pressable>
         </View>
-
+        </View>
       </ScrollView>
       <FindFriendsModal
         visible={showInviteesModal}
         onClose={(count, selectedUserIds) => {
-          if (count !== undefined) setLastAddFriendsCount(count);
-          if (selectedUserIds !== undefined) setSelectedInviteeIds(selectedUserIds);
+          if (hasAttendees && selectedUserIds !== undefined && currentStatus?.sharedWith) {
+            const merged = [...new Set([...currentStatus.sharedWith, ...selectedUserIds])];
+            setSelectedInviteeIds(merged);
+            setLastAddFriendsCount(merged.length);
+          } else {
+            if (count !== undefined) setLastAddFriendsCount(count);
+            if (selectedUserIds !== undefined) setSelectedInviteeIds(selectedUserIds);
+          }
           setShowInviteesModal(false);
         }}
         asFullScreen={false}
-        initialSelectedUserIds={currentStatus?.sharedWith ?? []}
+        initialSelectedUserIds={
+          selectedInviteeIds.length > 0 ? selectedInviteeIds : (currentStatus?.sharedWith ?? [])
+        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -342,13 +388,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
     minHeight: 60,
+    backgroundColor: '#fff',
+    zIndex: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   closeButton: { padding: 4, width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '600', color: '#000', flex: 1, textAlign: 'center' },
   doneButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -356,66 +409,85 @@ const styles = StyleSheet.create({
   doneButtonDisabled: { backgroundColor: '#e0e0e0' },
   doneButtonText: { fontSize: 16, color: '#fff', fontWeight: '600' },
   doneButtonTextDisabled: { color: '#999' },
-  content: { flex: 1, padding: 20 },
-  messageContainer: { marginBottom: 28 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  content: { flex: 1, backgroundColor: '#f5f5f5' },
+  contentContainer: { paddingBottom: 40 },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 32,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  messageContainer: { marginBottom: 20 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionLabel: { fontSize: 14, fontWeight: '600', color: '#000' },
   requiredIndicator: { fontSize: 12, color: '#999', fontWeight: '400' },
   messageInput: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#e0e0e0',
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
     color: '#000',
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
     minHeight: 100,
     textAlignVertical: 'top',
   },
-  inputIncomplete: { borderColor: '#ff9500', backgroundColor: '#fffbf5' },
-  inputFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
+  inputIncomplete: {},
+  inputFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   helperText: { fontSize: 12, color: '#999', fontStyle: 'italic' },
   characterCount: { fontSize: 12, color: '#999' },
-  locationContainer: { marginBottom: 28 },
-  locationSelectorContainer: { flexDirection: 'row', gap: 12, marginBottom: 6 },
+  locationContainer: { marginBottom: 20 },
+  locationSelectorContainer: { gap: 12, marginBottom: 8 },
   locationOption: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderRadius: 12,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#e0e0e0',
     backgroundColor: '#fff',
     gap: 8,
   },
-  locationOptionIncomplete: { borderColor: '#ff9500', backgroundColor: '#fffbf5' },
+  locationOptionIncomplete: {},
   locationOptionSelected: { borderColor: '#007AFF', backgroundColor: '#f0f8ff' },
   locationOptionText: { fontSize: 15, color: '#666', fontWeight: '500' },
   locationOptionTextSelected: { color: '#007AFF', fontWeight: '600' },
-  timeContainer: { marginBottom: 20 },
-  timePickerContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 16 },
-  timePickerContainerIncomplete: {
-    borderWidth: 1.5,
-    borderColor: '#ff9500',
+  locationOptionSubtext: { fontSize: 12, color: '#999', fontWeight: '400' },
+  locationReadOnly: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    padding: 12,
-    backgroundColor: '#fffbf5',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#f5f5f5',
   },
-  tellFriendsContainer: { marginTop: 20, marginBottom: 20 },
+  locationReadOnlyText: { fontSize: 15, color: '#666', fontWeight: '600' },
+  timeContainer: { marginBottom: 8 },
+  timePickerContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 16 },
+  timePickerContainerIncomplete: {},
+  tellFriendsContainer: { marginTop: 8, marginBottom: 40 },
   tellFriendsButton: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 14,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: '#007AFF',
     backgroundColor: 'transparent',
-    gap: 6,
+    gap: 8,
   },
-  tellFriendsCount: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
+  tellFriendsButtonText: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
 });
